@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>KitchenAid · Coffee demo dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#FFFFFF; --ink:#1C211E; --mute:#5D665F; --line:#DCE1DD; --band:#F1F3F1;
+  --green:#1B3A2A; --green-ink:#FFFFFF; --orange:#C55A11; --peach:#FBE3D2; --mint:#DDEFE4;
+  --warn:#B3261E; --warn-bg:#FCE8E6; --amber-bg:#FFF4D6; --focus:#C55A11;
+  box-sizing:border-box;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#111613; --ink:#E6EBE7; --mute:#9BA69E; --line:#2A332D; --band:#18201B;
+  --green:#2C5A43; --green-ink:#FFFFFF; --orange:#EE8A4A; --peach:#3A2A1F; --mint:#1F3328;
+  --warn:#FF8A80; --warn-bg:#3A1F1D; --amber-bg:#3A321A; --focus:#EE8A4A}}
+:root[data-theme="dark"]{
+  --paper:#111613; --ink:#E6EBE7; --mute:#9BA69E; --line:#2A332D; --band:#18201B;
+  --green:#2C5A43; --green-ink:#FFFFFF; --orange:#EE8A4A; --peach:#3A2A1F; --mint:#1F3328;
+  --warn:#FF8A80; --warn-bg:#3A1F1D; --amber-bg:#3A321A; --focus:#EE8A4A}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.45 Montserrat,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;font-variant-numeric:tabular-nums;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{max-width:1440px;margin:0 auto;padding:22px 16px 40px}
+header{display:flex;flex-wrap:wrap;gap:10px 24px;justify-content:space-between;align-items:flex-end}
+.client{font-weight:600;color:var(--orange);font-size:14px}
+h1{font-family:"DM Serif Display",Georgia,serif;font-weight:400;font-size:clamp(28px,4.2vw,44px);line-height:1.05;margin:2px 0 4px}
+.sub{color:var(--mute)}
+.asat{color:var(--mute);font-size:13px;text-align:right}
+.controls{position:sticky;top:env(safe-area-inset-top,0px);z-index:6;background:var(--paper);display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;padding:12px 0;margin-top:14px;border-bottom:1px solid var(--line)}
+select,input[type=search],button{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-height:36px}
+button{cursor:pointer;font-weight:600}
+button.primary{background:var(--green);color:var(--green-ink);border-color:var(--green)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;border-right:1px solid var(--line);font-weight:500}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--green);color:var(--green-ink);font-weight:600}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.lbl{font-size:12px;color:var(--mute);margin-right:-4px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:16px 0}
+.kpi{border-radius:14px;padding:12px 14px;background:var(--band)}
+.kpi b{display:block;font-size:26px;font-weight:700;line-height:1.1}
+.kpi span{color:var(--mute);font-size:12.5px}
+.kpi.hero{background:var(--green);color:var(--green-ink)}.kpi.hero span{color:var(--green-ink);opacity:.85}
+.kpi.warm{background:var(--peach)}
+.notice{border-radius:10px;padding:9px 12px;margin:0 0 12px;background:var(--amber-bg);font-size:13px}
+.tbl{overflow:auto;border:1px solid var(--line);border-radius:12px;max-height:72vh}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
+th,td{padding:7px 9px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top;white-space:nowrap}
+thead th{position:sticky;top:0;z-index:3;background:var(--green);color:var(--green-ink);font-weight:600;cursor:pointer;user-select:none}
+thead th.q{background:#2E4E3D}
+tfoot td{position:sticky;bottom:0;background:var(--mint);font-weight:700;border-top:2px solid var(--green)}
+.l{text-align:left}
+td.first,th.first{position:sticky;left:0;z-index:2;background:var(--paper)}
+thead th.first{z-index:4;background:var(--green)}
+tfoot td.first{z-index:4;background:var(--mint)}
+tbody tr:not(.detail):hover td{background:var(--band)}
+tbody tr.detail td{background:var(--paper)!important;white-space:normal}
+td.ans{text-align:left;white-space:normal;min-width:190px;max-width:260px}
+td.ans div{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+td.short{min-width:90px;max-width:120px}
+td.bad{background:var(--warn-bg)!important;color:var(--warn);font-weight:700}
+td.soft{background:var(--amber-bg)!important}
+.zero{color:var(--mute);opacity:.55}
+.x{border:0;background:none;padding:0 4px;min-height:0;font-size:16px;line-height:1;color:var(--orange)}
+.pill{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:999px;background:var(--band);color:var(--mute);font-weight:600}
+.pill.pend{background:var(--amber-bg);color:var(--ink)}
+.est{color:var(--orange);font-weight:700}
+a.ph{color:var(--green);font-weight:700;text-decoration:none;white-space:nowrap}a.ph:hover{text-decoration:underline}
+:root[data-theme="dark"] a.ph{color:var(--orange)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) a.ph{color:var(--orange)}}
+.detailgrid{display:grid;grid-template-columns:minmax(240px,1fr) minmax(280px,1.6fr);gap:18px;padding:6px 2px 10px;position:sticky;left:44px;width:min(1080px,calc(100vw - 110px))}
+@media (max-width:760px){.detailgrid{grid-template-columns:1fr}}
+.detailgrid h3{font-size:13px;margin:4px 0 6px;color:var(--orange)}
+.mini{width:100%;font-size:12.5px}.mini td{padding:4px 6px;white-space:normal}
+dl{margin:0;display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:6px 12px}
+dt{color:var(--mute);font-weight:600}dd{margin:0;white-space:pre-wrap}
+footer{margin-top:22px;color:var(--mute);font-size:12.5px;line-height:1.6}
+footer p{margin:4px 0}
+.empty{padding:22px;text-align:center;color:var(--mute);white-space:normal}
+@media (max-width:700px){.controls{position:static}.tbl{max-height:none}td.ans{min-width:160px}}
+#lock{position:fixed;inset:0;z-index:50;background:var(--paper);display:flex;align-items:center;justify-content:center;padding:16px}
+#lock form{background:var(--band);padding:28px;border-radius:14px;width:min(380px,100%)}
+#lock h2{font-family:"DM Serif Display",Georgia,serif;font-weight:400;font-size:28px;margin:0 0 6px}
+#lock p{color:var(--mute);margin:0 0 16px}#lock input{width:100%;margin-bottom:10px}#lock button{width:100%}
+#lockmsg{min-height:20px;color:var(--warn);font-size:13px;margin-top:8px}
+.live{display:inline-flex;align-items:center;gap:8px}.dot{width:8px;height:8px;border-radius:50%;background:#2E9E5B;display:inline-block}
+#rstatus{font-size:12.5px;color:var(--mute)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="lock"><form id="lockform"><h2>KitchenAid demo dashboard</h2><p>Enter the password to view the latest data.</p>
+<input id="pw" type="password" autocomplete="current-password" aria-label="Password" autofocus><button class="primary" type="submit">Open dashboard</button><div id="lockmsg" role="alert"></div></form></div>
+<div class="wrap">
+<header>
+  <div><div class="client" id="client"></div><h1>Coffee demo weekly report</h1><div class="sub" id="sub"></div></div>
+  <div class="asat" id="asat"></div>
+</header>
+
+<div class="controls" role="region" aria-label="Filters">
+  <span class="lbl">Country</span>
+  <div class="seg" id="country" role="group" aria-label="Country">
+    <button data-c="AU" aria-pressed="false">AU</button><button data-c="NZ" aria-pressed="false">NZ</button><button data-c="" aria-pressed="true">Both</button>
+  </div>
+  <span class="lbl">Week</span><select id="week" aria-label="Week"></select>
+  <span class="lbl">View by</span>
+  <div class="seg" id="view" role="group" aria-label="View by">
+    <button data-v="shift" aria-pressed="true">Shift</button><button data-v="date" aria-pressed="false">Date</button><button data-v="state" aria-pressed="false">State</button><button data-v="store" aria-pressed="false">Store</button><button data-v="staff" aria-pressed="false">Staff</button>
+  </div>
+  <select id="fState" aria-label="State or region"></select>
+  <select id="fStaff" aria-label="Staff"></select>
+  <select id="fStore" aria-label="Store"></select>
+  <input type="search" id="q" placeholder="Search answers" aria-label="Search answers">
+  <button id="reset">Clear filters</button>
+  <button class="primary" id="csv">Download CSV</button>
+  <span class="live"><button id="refresh" title="Load the newest data">↻ Refresh</button><span id="rstatus" aria-live="polite"></span></span>
+</div>
+
+<div class="kpis" id="kpis"></div>
+<div id="notices"></div>
+<div class="tbl"><table id="t"></table></div>
+<footer id="foot"></footer>
+</div>
+
+<script>
+let D = null, M = [];
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const nf = (n, d = 0) => Number(n).toLocaleString("en-AU", {minimumFractionDigits: d, maximumFractionDigits: d});
+const CUR = {AUD: "A$", NZD: "NZ$"};
+const money = (n, c = "AUD") => (CUR[c] || "$") + nf(n, 0);
+const moneyBy = t => { const parts = Object.entries(t.val).sort().map(([c, v]) => money(v, c)); return parts.length ? parts.join(" · ") : money(0); };
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const pd = s => { const [y,m,d] = s.split("-").map(Number); return new Date(Date.UTC(y, m-1, d)); };
+const fmtD = s => { const d = pd(s); return `${DOW[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
+const addDays = (s, n) => { const d = pd(s); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); };
+const weekLabel = w => { const e = addDays(w, 6), a = pd(w), b = pd(e); return `${a.getUTCDate()} ${MON[a.getUTCMonth()]} – ${b.getUTCDate()} ${MON[b.getUTCMonth()]} ${b.getUTCFullYear()}`; };
+const TZ = "Australia/Sydney";
+const fmtDT = iso => new Intl.DateTimeFormat("en-AU", {timeZone: TZ, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}).format(new Date(iso));
+let country = "", view = "shift", sortKey = "date", sortDir = 1, open = new Set();
+const opts = (el, label, vals) => { const cur = el.value; el.innerHTML = `<option value="">${label}</option>` + vals.map(v => `<option>${esc(v)}</option>`).join(""); if ([...el.options].some(o => o.value === cur)) el.value = cur; };
+const uniq = k => [...new Set(D.shifts.map(s => s[k]))].sort();
+const stateOpts = () => opts($("fState"), country === "NZ" ? "All regions" : country === "AU" ? "All states" : "All states / regions", [...new Set(D.shifts.filter(s => !country || s.country === country).map(s => s.state))].sort());
+
+function ingest(data) {
+  D = data; M = D.models;
+  D.shifts.forEach(s => {
+    s.m = Object.fromEntries(M.map(k => [k, 0])); s.other = 0; s.extraModels = {};
+    s.products.forEach(p => { if (p.model && s.m[p.model] !== undefined) s.m[p.model] += p.q; else if (p.model) { s.extraModels[p.model] = (s.extraModels[p.model]||0) + p.q; s.other += p.q; } else s.other += p.q; });
+    s.machines = M.reduce((a, k) => a + s.m[k], 0) + Object.values(s.extraModels).reduce((a, b) => a + b, 0);
+    s.hay = (Object.values(s.answers).join(" ") + " " + s.store + " " + s.staff).toLowerCase();
+  });
+  $("client").textContent = D.client;
+  $("asat").innerHTML = `<span class="live"><span class="dot" aria-hidden="true"></span>Data updated ${esc(fmtDT(D.generated_at))}</span><br>Source: Mesh Circle (Salesforce)`;
+  const curW = $("week").value, weeks = [...new Set(D.shifts.map(s => s.week))].sort().reverse();
+  $("week").innerHTML = weeks.map(w => `<option value="${w}">${weekLabel(w)}</option>`).join("") + `<option value="all">All weeks (${esc(D.period_label)})</option>`;
+  if (curW && [...$("week").options].some(o => o.value === curW)) $("week").value = curW;
+  stateOpts(); opts($("fStaff"), "All staff", uniq("staff")); opts($("fStore"), "All stores", uniq("store"));
+  render();
+}
+document.querySelectorAll("#country button").forEach(b => b.onclick = () => { country = b.dataset.c; document.querySelectorAll("#country button").forEach(x => x.setAttribute("aria-pressed", x === b)); stateOpts(); render(); });
+document.querySelectorAll("#view button").forEach(b => b.onclick = () => {
+  view = b.dataset.v; document.querySelectorAll("#view button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  sortKey = view === "shift" ? "date" : "key"; sortDir = 1; render();
+});
+["week","fState","fStaff","fStore"].forEach(id => $(id).onchange = render);
+$("q").oninput = render;
+$("reset").onclick = () => { ["fState","fStaff","fStore"].forEach(id => $(id).value = ""); $("q").value = ""; render(); };
+
+function filtered() {
+  const w = $("week").value, st = $("fState").value, sf = $("fStaff").value, so = $("fStore").value, q = $("q").value.trim().toLowerCase();
+  return D.shifts.filter(s => (!country || s.country === country) && (w === "all" || s.week === w) && (!st || s.state === st) && (!sf || s.staff === sf) && (!so || s.store === so) && (!q || s.hay.includes(q)));
+}
+function totals(rows) {
+  const t = {n: rows.length, hours: 0, demos: 0, units: 0, value: 0, val: {}, photos: 0, other: 0, machines: 0, m: Object.fromEntries(M.map(k => [k, 0])), stores: new Set(rows.map(r => r.store)).size, vis: [], est: false, pending: 0, fridgeBad: 0};
+  rows.forEach(r => { t.val[r.currency] = (t.val[r.currency] || 0) + r.value; t.photos += r.photos.count; t.hours += r.hours; t.demos += r.demos; t.units += r.units; t.value += r.value; t.other += r.other; t.machines += r.machines; M.forEach(k => t.m[k] += r.m[k]);
+    if (r.visitors_n != null) t.vis.push(r.visitors_n); if (r.estimated) t.est = true; if (r.price_missing) t.missing = (t.missing || 0) + r.products.filter(p => p.match === "missing").length; if (r.status !== "Approved") t.pending++; if ((r.fridge_n ?? 0) > 5) t.fridgeBad++; });
+  t.avgVis = t.vis.length ? t.vis.reduce((a, b) => a + b, 0) / t.vis.length : null;
+  return t;
+}
+const num = (v, d = 0) => v ? nf(v, d) : `<span class="zero">0</span>`;
+
+function render() {
+  const rows = filtered(), T = totals(rows), w = $("week").value;
+  $("sub").textContent = (country ? country + " · " : "AU & NZ · ") + (w === "all" ? `${D.period_label}, all weeks` : `Week of ${weekLabel(w)}`) + ` · ${D.program}`;
+  $("kpis").innerHTML = [
+    ["hero", T.n, "Shifts"], ["", nf(T.hours, 1), "Hours"], ["", nf(T.demos), "Demos / tastings"],
+    ["", T.n ? nf(T.demos / T.n, 1) : "–", "Demos per shift"], ["warm", nf(T.machines), "Coffee machines sold"],
+    ["", nf(T.other), "Other products sold"], ["warm", moneyBy(T) + (T.est ? "*" : ""), "Value at RRP"], ["", T.stores, "Stores"]
+  ].map(([c, v, l]) => `<div class="kpi ${c}"><b>${v}</b><span>${l}</span></div>`).join("");
+  const n = [];
+  if (T.pending) n.push(`${T.pending} shift${T.pending > 1 ? "s are" : " is"} submitted but not yet approved. Figures may change after review.`);
+  if (T.missing) n.push(`Value leaves out ${T.missing} item(s) without a matched price. Open the shift to see which.`);
+  if (T.est) n.push(`* Value includes items where Salesforce doesn't record the exact model; the lowest matching RRP is used. Open a shift to see which.`);
+  $("notices").innerHTML = n.map(x => `<div class="notice">${esc(x)}</div>`).join("");
+  view === "shift" ? shiftTable(rows, T) : groupTable(rows, T);
+  foot();
+}
+
+function sortRows(rows, getters) {
+  const g = getters[sortKey] || (r => r[sortKey]);
+  return [...rows].sort((a, b) => { const x = g(a), y = g(b); return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y))) * sortDir || String(a.store||a.key).localeCompare(String(b.store||b.key)); });
+}
+function head(cols) {
+  return `<thead><tr>${cols.map(c => `<th scope="col" class="${c.cls||""}" data-k="${c.k}" title="${esc(c.title||c.t)}">${esc(c.t)}${c.k === sortKey ? (sortDir > 0 ? " ▲" : " ▼") : ""}</th>`).join("")}</tr></thead>`;
+}
+function bindSort(cols) {
+  $("t").querySelectorAll("thead th").forEach(th => th.onclick = () => { const k = th.dataset.k; if (!k || k === "x") return; sortDir = k === sortKey ? -sortDir : (cols.find(c => c.k === k).num ? -1 : 1); sortKey = k; render(); });
+}
+
+function shiftTable(rows, T) {
+  const Q = D.questions;
+  const cols = [{k: "x", t: "", cls: "first"}, {k: "date", t: "Date", cls: "l"}, {k: "state", t: "State / region", cls: "l"}, {k: "store", t: "Store", cls: "l"}, {k: "staff", t: "Staff", cls: "l"},
+    {k: "hours", t: "Hours", num: 1}, {k: "demos", t: "Demos", num: 1}, ...M.map(m => ({k: "m_" + m, t: m, num: 1, title: m === "Semi" ? "Semi-automatic espresso machine" : m + " fully automatic"})),
+    {k: "other", t: "Other", num: 1, title: "Other KitchenAid products sold. Open the shift for SKUs"}, {k: "value", t: "Value (RRP)", num: 1}, {k: "status", t: "Status", cls: "l"}, {k: "photos", t: "Photos", num: 1, title: "Photos attached to the timesheet. Opens Mesh Circle (login required)"},
+    ...Q.map(q => ({k: "q_" + q.key, t: q.label, cls: "l q", title: q.full}))];
+  const get = {photos: r => r.photos.count, date: r => r.date + r.state, ...Object.fromEntries(M.map(m => ["m_" + m, r => r.m[m]])), ...Object.fromEntries(Q.map(q => ["q_" + q.key, r => q.key === "fridge" ? (r.fridge_n ?? -1) : q.key === "visitors" ? (r.visitors_n ?? -1) : r.answers[q.key]]))};
+  const sorted = sortRows(rows, get);
+  const qcell = (r, q) => {
+    if (r.answers[q.key] == null) return `<td class="l short"><span class="zero">Not asked</span></td>`;
+    const a = r.answers[q.key] || "";
+    if (q.key === "fridge") return `<td class="short ${r.fridge_n > 5 ? "bad" : ""}" title="${r.fridge_n > 5 ? "Above 5 °C: outside HACCP cold-chain limit" : ""}">${esc(a)}${r.fridge_n > 5 ? " ⚠" : ""}</td>`;
+    if (q.key === "milk_ok") return `<td class="ans short ${/^y/i.test(a) ? "" : "soft"}"><div>${esc(a)}</div></td>`;
+    return `<td class="ans ${q.key === "traffic" || q.key === "visitors" || q.key === "competitor" ? "short" : ""}" title="${esc(a)}"><div>${esc(a)}</div></td>`;
+  };
+  const body = sorted.map(r => {
+    const isOpen = open.has(r.id);
+    const main = `<tr><td class="first"><button class="x" aria-expanded="${isOpen}" aria-label="${isOpen ? "Hide" : "Show"} shift details" data-id="${r.id}">${isOpen ? "−" : "+"}</button></td>
+      <td class="l">${fmtD(r.date)}</td><td class="l">${r.state}</td><td class="l">${esc(r.store)}</td><td class="l">${esc(r.staff)}</td>
+      <td>${nf(r.hours, 2)}</td><td>${r.demos}</td>${M.map(m => `<td>${num(r.m[m])}</td>`).join("")}
+      <td>${num(r.other)}</td><td>${r.value ? money(r.value, r.currency) : `<span class="zero">${money(0, r.currency)}</span>`}${r.estimated ? '<span class="est">*</span>' : ""}</td>
+      <td class="l"><span class="pill ${r.status !== "Approved" ? "pend" : ""}">${r.status}</span></td>
+      <td>${phLink(r)}</td>${Q.map(q => qcell(r, q)).join("")}</tr>`;
+    if (!isOpen) return main;
+    const prod = r.products.length ? `<table class="mini"><tbody>${r.products.map(p => `<tr><td class="l">${esc(p.name)}<br><span class="pill">${esc(p.sku)}</span> <span class="pill">${esc(p.cat)}</span>${p.match === "estimated" ? ` <span class="est" title="${esc(p.note)}">* estimated price</span>` : p.match === "missing" ? ` <span class="est">no price found</span>` : ""}</td><td>${p.q} × ${money(p.rrp, r.currency)}</td></tr>`).join("")}</tbody></table>`
+      : `<p class="zero">No products recorded on this shift.</p>`;
+    const qa = `<dl>${Q.map(q => `<dt title="${esc(q.full)}">${esc(q.label)}</dt><dd>${r.answers[q.key] == null ? "Not asked" : esc(r.answers[q.key] || "–")}</dd>`).join("")}</dl>`;
+    return main + `<tr class="detail"><td class="first"></td><td colspan="${cols.length - 1}" class="l"><div class="detailgrid"><div><h3>Products sold · ${r.start}–${r.end}</h3>${prod}<p>${r.photos.count ? `<a class="ph" href="${esc(r.photos.link)}" target="_blank" rel="noopener">Open ${r.photos.count} attachment${r.photos.count > 1 ? "s" : ""} in Mesh Circle</a>` : `<span class="zero">No photos attached.</span>`}</p>${r.unlisted ? `<p class="est">${r.unlisted} unit(s) sold but not on the product list.</p>` : ""}</div><div><h3>Questionnaire</h3>${qa}</div></div></td></tr>`;
+  }).join("");
+  const foot = `<tfoot><tr><td class="first"></td><td class="l" colspan="4">Total · ${T.n} shifts · ${T.stores} stores</td><td>${nf(T.hours, 2)}</td><td>${nf(T.demos)}</td>${M.map(m => `<td>${T.m[m]}</td>`).join("")}<td>${T.other}</td><td>${moneyBy(T)}${T.est ? "*" : ""}</td><td class="l"></td><td>${T.photos}</td>
+    <td class="l">${trafficMix(rows)}</td><td class="l">${T.avgVis != null ? "Avg " + nf(T.avgVis, 1) : ""}</td>${"<td></td>".repeat(5)}<td class="l">${T.fridgeBad ? `<span style="color:var(--warn)">${T.fridgeBad} above 5 °C</span>` : ""}</td><td></td></tr></tfoot>`;
+  $("t").innerHTML = head(cols) + `<tbody>${body || `<tr><td class="empty" colspan="${cols.length}">No shifts match these filters. Clear the filters or pick another week.</td></tr>`}</tbody>` + foot;
+  bindSort(cols);
+  $("t").querySelectorAll("button.x").forEach(b => b.onclick = () => { const id = b.dataset.id; open.has(id) ? open.delete(id) : open.add(id); render(); });
+}
+function phLink(r) {
+  if (!r.photos.count) return `<span class="zero">–</span>`;
+  return `<a class="ph" href="${esc(r.photos.link)}" target="_blank" rel="noopener" title="Open attachments in Mesh Circle">📷 ${r.photos.count}</a>`;
+}
+function trafficMix(rows) {
+  const c = {}; rows.forEach(r => c[r.traffic_level] = (c[r.traffic_level] || 0) + 1);
+  return ["Light","Medium","Busy"].filter(k => c[k]).map(k => `${k} ${c[k]}`).join(" · ");
+}
+
+function groupTable(rows, T) {
+  const keyFn = {date: r => r.date, state: r => r.state, store: r => r.store, staff: r => r.staff}[view];
+  const label = {date: "Date", state: "State / region", store: "Store", staff: "Staff"}[view];
+  const g = {}; rows.forEach(r => (g[keyFn(r)] = g[keyFn(r)] || []).push(r));
+  const groups = Object.entries(g).map(([k, rs]) => { const t = totals(rs); return {key: k, rs, ...t, per: t.demos / t.n, extra: view === "store" ? rs[0].state + " · " + rs[0].country : view === "staff" ? [...new Set(rs.map(r => r.state))].join(", ") : ""}; });
+  const cols = [{k: "key", t: label, cls: "l first"}, ...(view === "store" || view === "staff" ? [{k: "extra", t: "State", cls: "l"}] : []),
+    {k: "n", t: "Shifts", num: 1}, {k: "hours", t: "Hours", num: 1}, {k: "demos", t: "Demos", num: 1}, {k: "per", t: "Demos / shift", num: 1},
+    ...M.map(m => ({k: "m_" + m, t: m, num: 1})), {k: "other", t: "Other", num: 1}, {k: "value", t: "Value (RRP)", num: 1}, {k: "photos", t: "Photos", num: 1}, {k: "avgVis", t: "Avg visitors", num: 1, title: "From question 2 (first number given)"},
+    {k: "mix", t: "Foot traffic", cls: "l"}];
+  const get = {...Object.fromEntries(M.map(m => ["m_" + m, r => r.m[m]])), avgVis: r => r.avgVis ?? -1, mix: r => trafficMix(r.rs)};
+  const sorted = sortRows(groups, get);
+  const disp = k => view === "date" ? fmtD(k) : esc(k);
+  const body = sorted.map(r => `<tr><td class="l first">${disp(r.key)}</td>${cols[1].k === "extra" ? `<td class="l">${esc(r.extra)}</td>` : ""}<td>${r.n}</td><td>${nf(r.hours, 2)}</td><td>${nf(r.demos)}</td><td>${nf(r.per, 1)}</td>
+    ${M.map(m => `<td>${num(r.m[m])}</td>`).join("")}<td>${num(r.other)}</td><td>${moneyBy(r)}${r.est ? '<span class="est">*</span>' : ""}</td><td>${r.photos}</td><td>${r.avgVis != null ? nf(r.avgVis, 1) : "–"}</td><td class="l">${trafficMix(r.rs)}</td></tr>`).join("");
+  const foot = `<tfoot><tr><td class="l first">Total</td>${cols[1].k === "extra" ? "<td></td>" : ""}<td>${T.n}</td><td>${nf(T.hours, 2)}</td><td>${nf(T.demos)}</td><td>${T.n ? nf(T.demos / T.n, 1) : "–"}</td>${M.map(m => `<td>${T.m[m]}</td>`).join("")}<td>${T.other}</td><td>${moneyBy(T)}${T.est ? "*" : ""}</td><td>${T.photos}</td><td>${T.avgVis != null ? nf(T.avgVis, 1) : "–"}</td><td class="l">${trafficMix(rows)}</td></tr></tfoot>`;
+  $("t").innerHTML = head(cols) + `<tbody>${body || `<tr><td class="empty" colspan="${cols.length}">No shifts match these filters.</td></tr>`}</tbody>` + foot;
+  bindSort(cols);
+}
+
+function foot() {
+  $("foot").innerHTML = `<p>One row per demo shift. Weeks run Monday to Sunday. Totals update with the filters. Tap + on a shift to see the SKUs sold and the full questionnaire answers. Data refreshes automatically from Salesforce; the page checks for new data every 5 minutes, or press Refresh.</p>
+  <p>AU and NZ values are shown separately in A$ and NZ$ and are never added together. Photos open the shift's attachments in Mesh Circle (login required). NZ shifts have no fridge-temperature question.</p>
+  <p>Coffee machine columns combine all colours of each model. "Other" counts every other KitchenAid product. ${esc(D.price_source)}</p>
+  <p>Value is indicative retail value at RRP, not what customers paid: in-store promotions (often 20% off) applied on many days. Units are as recorded by the demonstrator at point of sale.</p>
+  <p>Foot traffic groups each answer by the lowest level mentioned ("light to medium" counts as Light). Avg visitors uses the first number given in question 2.</p>
+  <p>Prepared by Mesh Marketing.</p>`;
+}
+
+// CSV of the current view (full answers)
+$("csv").onclick = () => {
+  const rows = filtered(), Q = D.questions, q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  let lines;
+  if (view === "shift") {
+    lines = [["Country","Date","State / region","Store","Retailer","Staff","Start","End","Hours","Demos",...M,"Other products","Value at RRP","Currency","Status","Photos","Photos link","Products (SKU x qty)",...Q.map(x => x.label)].map(q).join(",")];
+    rows.forEach(r => lines.push([r.country, r.date, r.state, r.store, r.retailer, r.staff, r.start, r.end, r.hours, r.demos, ...M.map(m => r.m[m]), r.other, r.value.toFixed(2), r.currency, r.status, r.photos.count, r.photos.link,
+      r.products.map(p => `${p.sku} x${p.q}`).join("; "), ...Q.map(x => r.answers[x.key])].map(q).join(",")));
+  } else {
+    const keyFn = {date: r => r.date, state: r => r.state, store: r => r.store, staff: r => r.staff}[view], g = {};
+    rows.forEach(r => (g[keyFn(r)] = g[keyFn(r)] || []).push(r));
+    lines = [[view, "Shifts", "Hours", "Demos", ...M, "Other products", "Value A$", "Value NZ$", "Photos", "Avg visitors"].map(q).join(",")];
+    Object.entries(g).sort().forEach(([k, rs]) => { const t = totals(rs); lines.push([k, t.n, t.hours.toFixed(2), t.demos, ...M.map(m => t.m[m]), t.other, (t.val.AUD || 0).toFixed(2), (t.val.NZD || 0).toFixed(2), t.photos, t.avgVis != null ? t.avgVis.toFixed(1) : ""].map(q).join(",")); });
+  }
+  const blob = new Blob(["﻿" + lines.join("\r\n")], {type: "text/csv;charset=utf-8"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = `KitchenAid_demos_${country || "AU-NZ"}_${$("week").value}_${view}.csv`; document.body.appendChild(a); a.click(); a.remove();
+};
+// ---------- secure loading + refresh ----------
+let PW = null, LAST = null, busy = false;
+const b64 = x => Uint8Array.from(atob(x), c => c.charCodeAt(0));
+async function decrypt(blob, pw) {
+  const km = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey({name: "PBKDF2", salt: b64(blob.s), iterations: blob.n, hash: "SHA-256"}, km, {name: "AES-GCM", length: 256}, false, ["decrypt"]);
+  const pt = await crypto.subtle.decrypt({name: "AES-GCM", iv: b64(blob.i)}, key, b64(blob.c));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+async function fetchBlob() {
+  const r = await fetch("data.enc.json?t=" + Date.now(), {cache: "no-store"});
+  if (!r.ok) throw new Error("Data file not available (" + r.status + ")");
+  return r.json();
+}
+async function refresh(manual) {
+  if (busy || !PW) return; busy = true; const st = $("rstatus");
+  if (manual) { st.textContent = "Checking…"; $("refresh").disabled = true; }
+  try {
+    const blob = await fetchBlob();
+    if (blob.g === LAST) { if (manual) st.textContent = "Up to date"; }
+    else { ingest(await decrypt(blob, PW)); LAST = blob.g; st.textContent = manual ? "Updated" : "New data loaded"; }
+  } catch (e) { st.textContent = "Couldn't refresh — try again shortly"; }
+  finally { busy = false; $("refresh").disabled = false; setTimeout(() => { if (st.textContent !== "Checking…") st.textContent = ""; }, 6000); }
+}
+$("refresh").onclick = () => refresh(true);
+setInterval(() => { if (document.visibilityState === "visible") refresh(false); }, 5 * 60 * 1000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(false); });
+$("lockform").addEventListener("submit", async ev => {
+  ev.preventDefault(); const msg = $("lockmsg"); msg.textContent = "Unlocking…";
+  try { const blob = await fetchBlob(); const data = await decrypt(blob, $("pw").value); PW = $("pw").value; LAST = blob.g; ingest(data); $("lock").remove(); }
+  catch (e) { msg.textContent = /not available/.test(e.message) ? e.message : "Wrong password."; }
+});
+</script>
+</body>
+</html>

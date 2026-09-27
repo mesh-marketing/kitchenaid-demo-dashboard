@@ -1,0 +1,43 @@
+name: Refresh dashboard data
+
+on:
+  schedule:
+    # every 15 minutes, 6am–9pm Sydney time (cron is in UTC)
+    - cron: "*/15 20-23 * * *"
+    - cron: "*/15 0-10 * * *"
+  workflow_dispatch: {}        # "Run workflow" button in the Actions tab = refresh now
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet requests cryptography
+      - name: Pull Salesforce and build encrypted data
+        env:
+          SF_DOMAIN: ${{ secrets.SF_DOMAIN }}
+          SF_CLIENT_ID: ${{ secrets.SF_CLIENT_ID }}
+          SF_CLIENT_SECRET: ${{ secrets.SF_CLIENT_SECRET }}
+          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+          CHECKS_PASSWORD: ${{ secrets.CHECKS_PASSWORD }}
+          REDACT_NAMES: ${{ secrets.REDACT_NAMES }}
+        run: python pipeline/refresh.py
+      - name: Publish if changed
+        run: |
+          git config user.name "dashboard-refresh"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data.enc.json checks.enc.json 2>/dev/null || git add data.enc.json
+          if git diff --cached --quiet; then echo "No change."; exit 0; fi
+          git commit -m "Refresh data $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push

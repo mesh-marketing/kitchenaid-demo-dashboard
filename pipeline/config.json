@@ -1,0 +1,97 @@
+{
+ "client": "KitchenAid Australia",
+ "program": "In-store coffee demonstrations (AU & NZ)",
+ "accounts": {
+  "KitchenAid": "AU",
+  "KitchenAid NZ": "NZ"
+ },
+ "business_unit": "Demo",
+ "weeks_back": 9,
+ "timezone": "Australia/Sydney",
+ "models": [
+  "KF2",
+  "KF4",
+  "KF7",
+  "KF8",
+  "Semi"
+ ],
+ "exclude_stores": [],
+ "questions": [
+  {
+   "n": "1",
+   "key": "traffic",
+   "label": "Foot traffic",
+   "full": "Was the foot traffic light, medium, or busy?"
+  },
+  {
+   "n": "2",
+   "key": "visitors",
+   "label": "Visitors to stand",
+   "full": "How many people visited the stand?"
+  },
+  {
+   "n": "3",
+   "key": "interest",
+   "label": "Machine interest",
+   "full": "Which machine were they interested in: Semi-auto, Compact (KF2 or KF4), KF7, or KF8?"
+  },
+  {
+   "n": "4",
+   "key": "cust_fb",
+   "label": "Customer feedback",
+   "full": "Customer feedback on the machine e.g. price point, functionality, features? Please provide details"
+  },
+  {
+   "n": "5",
+   "key": "store_fb",
+   "label": "Store feedback",
+   "full": "Did the store provide any feedback? Any additional feedback from customers?"
+  },
+  {
+   "n": "6",
+   "key": "competitor",
+   "label": "Other coffee demonstrator",
+   "full": "Was there another Coffee demonstrator in store? Yes or No. If yes, which brand and model were they demonstrating?"
+  },
+  {
+   "n": "7",
+   "key": "promo",
+   "label": "Promotion & POS",
+   "full": "Was there any promotional activity (e.g. price offer or GWP), and was there POS to support it? Please provide details and a photo if applicable."
+  },
+  {
+   "n": "8",
+   "key": "fridge",
+   "label": "Fridge temp °C",
+   "full": "HACCP - What was the fridge temperature when you purchased the milk?"
+  },
+  {
+   "n": "9",
+   "key": "milk_ok",
+   "label": "Milk & equipment OK",
+   "full": "HACCP - Was the milk purchased in good packaging and stored correctly (fridge or cooler bag), and has all demo equipment been clean?"
+  }
+ ],
+ "price_source": "AU: RRP from kitchenaid.com.au (the site's 'compare at' price; current price where no RRP is shown), checked 28 Sep 2026. NZ: no NZ price list yet; NZ$ value shows 0 until one is added.",
+ "redact": {
+  "health_terms": [
+   "parkinson",
+   "diabet",
+   "cancer",
+   "dementia",
+   "alzheimer",
+   "pregnan",
+   "disabilit",
+   "wheelchair",
+   "stroke",
+   "chemo",
+   "autis",
+   "epilep",
+   "hearing aid",
+   "illness",
+   "medical condition",
+   "surgery"
+  ],
+  "names_to_roles_secret": "REDACT_NAMES"
+ }
+}

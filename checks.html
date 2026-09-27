@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Data checks · Mesh only</title>
+<style>
+:root{--paper:#fff;--ink:#1C211E;--mute:#5D665F;--band:#F1F3F1;--green:#1B3A2A;--warn:#B3261E;--amber:#FFF4D6;--focus:#C55A11;box-sizing:border-box}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#111613;--ink:#E6EBE7;--mute:#9BA69E;--band:#18201B;--green:#2C5A43;--warn:#FF8A80;--amber:#3A321A;--focus:#EE8A4A}}
+:root[data-theme="dark"]{--paper:#111613;--ink:#E6EBE7;--mute:#9BA69E;--band:#18201B;--green:#2C5A43;--warn:#FF8A80;--amber:#3A321A;--focus:#EE8A4A}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Arial,sans-serif;padding:24px 16px}
+.wrap{max-width:760px;margin:0 auto}
+h1{font-size:24px;margin:0 0 4px}.mute{color:var(--mute)}
+form{background:var(--band);padding:20px;border-radius:12px;margin-top:16px}
+input,button{font:inherit;padding:9px 12px;border-radius:8px;border:1px solid #cfd6d1;background:var(--paper);color:var(--ink);min-height:40px}
+button{background:var(--green);color:#fff;border-color:var(--green);font-weight:600;cursor:pointer}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+ul{padding-left:20px}li{margin:8px 0;padding:8px 10px;background:var(--amber);border-radius:8px;list-style-position:inside}
+#msg{color:var(--warn);min-height:20px}
+a{color:var(--focus)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Data checks</h1>
+  <p class="mute">Mesh only. Drafts, possible duplicates, missing prices, HACCP readings and redactions from the latest Salesforce refresh. Nothing here is shown on the client dashboard.</p>
+  <form id="f"><label for="pw">Checks password</label><br><input id="pw" type="password" autocomplete="current-password" autofocus> <button type="submit">Show checks</button><div id="msg" role="alert"></div></form>
+  <div id="out"></div>
+  <p class="mute" id="run"></p>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const b64 = x => Uint8Array.from(atob(x), c => c.charCodeAt(0));
+  const m = location.hostname.match(/^([^.]+)\.github\.io$/), repo = location.pathname.split("/").filter(Boolean)[0];
+  if (m && repo) $("run").innerHTML = `Need fresh data right now? <a href="https://github.com/${m[1]}/${repo}/actions/workflows/refresh.yml" target="_blank" rel="noopener">Run the refresh in GitHub</a> (Run workflow button; GitHub login required). The dashboard picks it up within a minute or two.`;
+  $("f").addEventListener("submit", async ev => {
+    ev.preventDefault(); $("msg").textContent = "Loading…";
+    try {
+      const blob = await (await fetch("checks.enc.json?t=" + Date.now(), {cache: "no-store"})).json();
+      const km = await crypto.subtle.importKey("raw", new TextEncoder().encode($("pw").value), "PBKDF2", false, ["deriveKey"]);
+      const key = await crypto.subtle.deriveKey({name: "PBKDF2", salt: b64(blob.s), iterations: blob.n, hash: "SHA-256"}, km, {name: "AES-GCM", length: 256}, false, ["decrypt"]);
+      const d = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name: "AES-GCM", iv: b64(blob.i)}, key, b64(blob.c))));
+      const when = new Intl.DateTimeFormat("en-AU", {timeZone: "Australia/Sydney", dateStyle: "medium", timeStyle: "short"}).format(new Date(d.generated_at));
+      $("msg").textContent = ""; $("f").remove();
+      $("out").innerHTML = `<p><b>${d.checks.length} check${d.checks.length === 1 ? "" : "s"}</b> · list changed ${esc(when)} · window ${esc(d.window[0])} to ${esc(d.window[1])}</p>` +
+        (d.checks.length ? `<ul>${d.checks.map(c => `<li>${esc(c)}</li>`).join("")}</ul>` : "<p>Nothing to check.</p>");
+    } catch (e) { $("msg").textContent = "Wrong password, or no checks file yet."; }
+  });
+})();
+</script>
+</body>
+</html>

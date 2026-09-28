@@ -208,6 +208,10 @@ def main():
             "period_label": f"from {start.day} {start.strftime('%b')}", "window": [start.isoformat(), today.isoformat()],
             "questions": [{k: q[k] for k in ("key", "label", "full")} for q in CFG["questions"] if not q.get("internal")], "models": CFG["models"],
             "price_source": CFG["price_source"], "shifts": rows}
+    # Refresh button: a narrow GitHub token (Actions write, this repo only) travels INSIDE the encrypted file,
+    # so only people with the dashboard password can use it to start a refresh.
+    if os.environ.get("DISPATCH_TOKEN"):
+        data["dispatch"] = {"token": os.environ["DISPATCH_TOKEN"], "repo": os.environ.get("GITHUB_REPOSITORY", "mesh-marketing/kitchenaid-demo-dashboard")}
 
     def seal(obj, password):
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM

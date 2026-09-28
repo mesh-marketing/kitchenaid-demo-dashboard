@@ -32,6 +32,8 @@ Rules, identical to the approved manual build:
 
 **3. Pages.** Under Settings → Pages, choose Deploy from branch → `main` / root. The link will be `https://mesh-marketing.github.io/<repo-name>/`.
 
+**3b. Refresh button (optional).** Create a fine-grained GitHub token (this repo only; Actions: read and write, Contents: read-only), add it as the secret `DISPATCH_TOKEN`, and add `DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}` to the env list in `refresh.yml`. The token is stored only inside the encrypted data, so only password holders can use it; the button then pulls Salesforce on demand (about a minute). Renew the token before it expires.
+
 **4. First run.** Open Actions → Refresh dashboard data → Run workflow, and check that it goes green.
 
 ## Maintenance

@@ -4,8 +4,8 @@ on:
   schedule:
     # about every 15 minutes, 6am–9pm Sydney time (cron is in UTC). Off-the-hour minutes because
     # GitHub delays or drops runs scheduled on :00/:15/:30/:45 when it is busy.
-    - cron: "7,22,37,52 20-23 * * *"
-    - cron: "7,22,37,52 0-10 * * *"
+    - cron: "8,23,38,53 20-23 * * *"
+    - cron: "8,23,38,53 0-10 * * *"
   workflow_dispatch: {}        # "Run workflow" button in the Actions tab = refresh now
 
 permissions:

@@ -213,6 +213,17 @@ def main():
         ct = AESGCM(key).encrypt(iv, json.dumps(obj, ensure_ascii=False).encode(), None)
         b = lambda x: base64.b64encode(x).decode()
         return {"v": 1, "s": b(salt), "i": b(iv), "n": it, "c": b(ct)}
+    def opens(blob, password):
+        """True if the published file decrypts with the current password (so a password change forces a re-encrypt)."""
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+        from cryptography.hazmat.primitives import hashes
+        try:
+            d = lambda k: base64.b64decode(blob[k])
+            key = PBKDF2HMAC(hashes.SHA256(), 32, d("s"), int(blob["n"])).derive(password.encode())
+            AESGCM(key).decrypt(d("i"), d("c"), None); return True
+        except Exception:
+            return False
     cpw = os.environ.get("CHECKS_PASSWORD") or ("test-checks-password" if a.fixtures else None)
     def write_checks():
         if not cpw: return
@@ -225,7 +236,7 @@ def main():
             prev = {}
         import hashlib
         hw = hashlib.sha256("\n".join(WARN).encode()).hexdigest()
-        if prev.get("h") == hw: return            # same checks as last time: don't republish
+        if prev.get("h") == hw and opens(prev, cpw): return            # same checks as last time: don't republish
         body["h"] = hw; chk.write_text(json.dumps(body))
     def public_log(msg):
         print(msg)
@@ -238,7 +249,8 @@ def main():
     outp = Path(a.out)
     if outp.exists():
         try:
-            if json.loads(outp.read_text()).get("h") == digest:
+            old = json.loads(outp.read_text())
+            if old.get("h") == digest and opens(old, pw):
                 write_checks(); public_log(f"No data change. {len(WARN)} internal check(s) — see checks.html.")
                 return
         except Exception:

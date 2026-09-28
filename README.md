@@ -35,6 +35,6 @@ Rules, identical to the approved manual build:
 
 ## Maintenance
 - New product with no price: it appears in checks. Add a line to `price_map_au.csv`.
-- Change a password: update the secret, then run the workflow. The old password stops working at the next refresh.
+- Change a password: update the secret, then run the workflow. The files are re-encrypted with the new password on that run, and the old one stops working.
 - Scheduled workflows pause after 60 days without any repo activity. The data commits normally count as activity; if demos stop for two months, re-enable the workflow in Actions.
 - Never commit readable data. `tests/` and `*.plain.json` are gitignored for that reason.

@@ -111,6 +111,7 @@ def main():
     tz = ZoneInfo(CFG["timezone"]); now = dt.datetime.now(tz)
     today = dt.date.fromisoformat(a.today) if a.today else now.date()
     start = monday(today) - dt.timedelta(weeks=CFG["weeks_back"] - 1)
+    start = min(start, start.replace(day=1))   # begin on the 1st so the Month filter shows whole months
     sf = Fixtures(a.fixtures) if a.fixtures else Salesforce(os.environ["SF_DOMAIN"], os.environ["SF_CLIENT_ID"], os.environ["SF_CLIENT_SECRET"])
     pw = os.environ.get("DASHBOARD_PASSWORD") or ("test-password-only" if a.fixtures else None)
     if not pw or len(pw) < 14: raise SystemExit("DASHBOARD_PASSWORD missing or too short (min 14 characters).")
@@ -120,7 +121,7 @@ def main():
                       f"AND {p}RB_Actual_Start_Date__c >= {start.isoformat()} AND {p}RB_Actual_Start_Date__c <= {today.isoformat()}")
     shifts_raw = sf.query("shifts", "SELECT Id, Name, RB_Customer__r.Name, RB_Actual_Start_Date__c, RB_Actual_Start_Time__c, RB_Actual_End_Time__c, "
         "RB_Customer_Store__r.Name, State__c, Employee_Name__r.FirstName, Employee_Name__r.LastName, Shift_Duration_Hours__c, "
-        f"Demos_and_Tastings__c, Product_Sales__c, Total_Sales__c, Status__c, CreatedDate FROM Timesheet__c WHERE {F()}")
+        f"Demos_and_Tastings__c, Product_Sales__c, Total_Sales__c, Status__c, CreatedDate, RB_Comments__c FROM Timesheet__c WHERE {F()}")
     prods_raw = sf.query("products", f"SELECT Timesheet__r.Name, RB_Customer_Product__r.Name, Quantity__c FROM Product_Sale__c WHERE {F('Timesheet__r.')}")
     qa_raw = sf.query("questionnaire", f"SELECT RB_Timesheet__r.Name, RB_Question__c, RB_Answer__c FROM RB_Questionnaire__c WHERE {F('RB_Timesheet__r.')} AND RB_Is_Deleted__c = false")
     files_raw = sf.query("files", f"SELECT LinkedEntityId, ContentDocument.FileExtension FROM ContentDocumentLink WHERE LinkedEntityId IN (SELECT Id FROM Timesheet__c WHERE {F()})")
@@ -138,7 +139,7 @@ def main():
 
     prods = defaultdict(list)
     for r in prods_raw: prods[r["Timesheet__r"]["Name"]].append((r["RB_Customer_Product__r"]["Name"], int(r.get("Quantity__c") or 1)))
-    qn = {q["n"]: q["key"] for q in CFG["questions"]}
+    qn = {q["n"]: q["key"] for q in CFG["questions"] if "n" in q}
     answers = defaultdict(dict)
     for r in qa_raw:
         m = re.match(r"\s*(\d+)\.", r["RB_Question__c"] or "")
@@ -188,6 +189,10 @@ def main():
         if not answers.get(sid): warn(f"Shift {sid}: no questionnaire answers.")
         fn = first_num(ans.get("fridge"))
         if fn is not None and fn > 5: warn(f"HACCP: shift {sid} logged fridge temperature {fn} °C (limit 5 °C).")
+        if ans.get("milk_ok") and re.search(r"\b(no|not|damaged|warm|expired|dirty)\b", ans["milk_ok"], re.I): warn(f"HACCP: shift {sid} milk/equipment answer: {ans['milk_ok'][:120]}")
+        for q in CFG["questions"]:
+            if q.get("internal"): ans.pop(q["key"], None)          # HACCP answers stay in checks only, never on the client dashboard
+            elif q.get("source") == "timesheet": ans[q["key"]] = redact((s.get(q["field"]) or "").strip(), sid)
         t = lambda x: (x or "")[:5]
         rows.append({"id": sid, "date": d.isoformat(), "week": monday(d).isoformat(), "state": s["State__c"], "store": title_store(s["RB_Customer_Store__r"]["Name"]),
             "retailer": retailer(s["RB_Customer_Store__r"]["Name"]), "staff": staff_name(s["Employee_Name__r"]["FirstName"], s["Employee_Name__r"]["LastName"]),
@@ -195,13 +200,13 @@ def main():
             "units": units, "unlisted": max(0, int(s["Total_Sales__c"] or 0) - int(s["Product_Sales__c"] or 0)),
             "status": "Pending approval" if s["Status__c"] == "Shift Submitted" else "Approved",
             "products": plist, "value": round(sum(p["value"] for p in plist), 2), "estimated": est, "price_missing": missing,
-            "answers": ans, "visitors_n": first_num(ans.get("visitors")), "traffic_level": traffic(ans.get("traffic")), "fridge_n": fn,
+            "answers": ans, "visitors_n": first_num(ans.get("visitors")), "traffic_level": traffic(ans.get("traffic")),
             "country": country, "currency": "NZD" if country == "NZ" else "AUD",
             "photos": {"count": files.get(s["Id"], 0), "link": f"https://meshcircle.my.site.com/customer/s/relatedlist/{s['Id'][:15]}/AttachedContentDocuments"}})
     rows.sort(key=lambda r: (r["date"], r["country"], r["state"], r["store"]))
     data = {"client": CFG["client"], "program": CFG["program"], "generated_at": now.isoformat(timespec="minutes"), "data_as_at": today.isoformat(),
             "period_label": f"from {start.day} {start.strftime('%b')}", "window": [start.isoformat(), today.isoformat()],
-            "questions": [{k: q[k] for k in ("key", "label", "full")} for q in CFG["questions"]], "models": CFG["models"],
+            "questions": [{k: q[k] for k in ("key", "label", "full")} for q in CFG["questions"] if not q.get("internal")], "models": CFG["models"],
             "price_source": CFG["price_source"], "shifts": rows}
 
     def seal(obj, password):
@@ -238,6 +243,9 @@ def main():
         hw = hashlib.sha256("\n".join(WARN).encode()).hexdigest()
         if prev.get("h") == hw and opens(prev, cpw): return            # same checks as last time: don't republish
         body["h"] = hw; chk.write_text(json.dumps(body))
+    def write_status():
+        # public, unencrypted: only the time of the last successful Salesforce check (no client data)
+        Path(a.out).with_name("status.json").write_text(json.dumps({"checked": now.isoformat(timespec="minutes")}))
     def public_log(msg):
         print(msg)
         if os.environ.get("GITHUB_STEP_SUMMARY"):
@@ -251,7 +259,7 @@ def main():
         try:
             old = json.loads(outp.read_text())
             if old.get("h") == digest and opens(old, pw):
-                write_checks(); public_log(f"No data change. {len(WARN)} internal check(s) — see checks.html.")
+                write_checks(); write_status(); public_log(f"No data change. {len(WARN)} internal check(s) — see checks.html.")
                 return
         except Exception:
             pass
@@ -259,7 +267,7 @@ def main():
     # encrypt
     blob = seal(data, pw); blob.update({"g": data["generated_at"], "h": digest})
     outp.write_text(json.dumps(blob))
-    write_checks()
+    write_checks(); write_status()
     if a.plain: Path(a.plain).write_text(json.dumps(data, ensure_ascii=False, indent=1))
 
     public_log(f"Data refreshed {data['generated_at']}. {len(WARN)} internal check(s) — see checks.html.")   # no client data in public logs

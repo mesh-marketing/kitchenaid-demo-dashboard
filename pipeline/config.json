@@ -63,13 +63,22 @@
    "n": "8",
    "key": "fridge",
    "label": "Fridge temp °C",
-   "full": "HACCP - What was the fridge temperature when you purchased the milk?"
+   "full": "HACCP - What was the fridge temperature when you purchased the milk?",
+   "internal": true
   },
   {
    "n": "9",
    "key": "milk_ok",
    "label": "Milk & equipment OK",
-   "full": "HACCP - Was the milk purchased in good packaging and stored correctly (fridge or cooler bag), and has all demo equipment been clean?"
+   "full": "HACCP - Was the milk purchased in good packaging and stored correctly (fridge or cooler bag), and has all demo equipment been clean?",
+   "internal": true
+  },
+  {
+   "key": "comments",
+   "label": "Comments",
+   "full": "Comments from the demonstrator (timesheet \"Comments.\" field)",
+   "source": "timesheet",
+   "field": "RB_Comments__c"
   }
  ],
  "price_source": "AU: RRP from kitchenaid.com.au (the site's 'compare at' price; current price where no RRP is shown), checked 28 Sep 2026. NZ: no NZ price list yet; NZ$ value shows 0 until one is added.",

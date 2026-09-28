@@ -7,13 +7,14 @@ Weekly in-store demo dashboard for KitchenAid AU & NZ, refreshed automatically f
 - **Data:** `data.enc.json` and `checks.enc.json` are AES-256 encrypted. The repo and site are public, but nothing readable is published, and the job logs print no client data.
 
 ## How it refreshes
-`.github/workflows/refresh.yml` runs every 15 minutes, 6am–9pm Sydney time. It pulls Salesforce, applies the rules below, and commits new encrypted files only when the data has changed. GitHub Pages republishes within about a minute. To refresh right now, open **Actions → Refresh dashboard data → Run workflow** (checks.html links there).
+`.github/workflows/refresh.yml` runs every 15 minutes, 6am–9pm Sydney time. It pulls Salesforce, applies the rules below, and commits new encrypted files only when the data has changed. GitHub Pages republishes within about a minute. Each run also writes `status.json` (the time of the last successful check, nothing else), shown top right as "Checked with Salesforce". GitHub can delay scheduled runs when busy, so gaps of 30–60 minutes can happen. To refresh right now, open **Actions → Refresh dashboard data → Run workflow** (checks.html links there).
 
 Rules, identical to the approved manual build:
 - Statuses: Submitted (shown as pending approval), Validated and Approved are included. Drafts are left out.
 - Possible duplicates (same person, store, date and overlapping hours): the later entry is left out and listed in checks.
 - Value at RRP comes from `pipeline/price_map_au.csv` and `catalogue_au.tsv` (kitchenaid.com.au, checked 28 Sep 2026). Unknown products are valued at 0 and listed in checks.
-- Answers: health details and retailer staff names are removed automatically (`pipeline/config.json`). Mesh still reviews checks.html.
+- Answers: questions 1–7 plus the timesheet "Comments." field. HACCP answers (fridge temperature, milk & equipment) are not shown to the client; any issue is listed in checks.html.
+- Health details (and any retailer staff names set in the `REDACT_NAMES` secret) are removed automatically. Mesh still reviews checks.html.
 - AU and NZ values are kept separate (A$ and NZ$).
 
 ## One-time setup (about 20 minutes)

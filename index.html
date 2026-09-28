@@ -107,6 +107,7 @@ footer p{margin:4px 0}
   <div class="seg" id="country" role="group" aria-label="Country">
     <button data-c="AU" aria-pressed="false">AU</button><button data-c="NZ" aria-pressed="false">NZ</button><button data-c="" aria-pressed="true">Both</button>
   </div>
+  <span class="lbl">Month</span><select id="month" aria-label="Month"></select>
   <span class="lbl">Week</span><select id="week" aria-label="Week"></select>
   <span class="lbl">View by</span>
   <div class="seg" id="view" role="group" aria-label="View by">
@@ -141,6 +142,7 @@ const pd = s => { const [y,m,d] = s.split("-").map(Number); return new Date(Date
 const fmtD = s => { const d = pd(s); return `${DOW[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
 const addDays = (s, n) => { const d = pd(s); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); };
 const weekLabel = w => { const e = addDays(w, 6), a = pd(w), b = pd(e); return `${a.getUTCDate()} ${MON[a.getUTCMonth()]} – ${b.getUTCDate()} ${MON[b.getUTCMonth()]} ${b.getUTCFullYear()}`; };
+const monthLabel = m => { const [y, mo] = m.split("-").map(Number); return `${["January","February","March","April","May","June","July","August","September","October","November","December"][mo - 1]} ${y}`; };
 const TZ = "Australia/Sydney";
 const fmtDT = iso => new Intl.DateTimeFormat("en-AU", {timeZone: TZ, weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit"}).format(new Date(iso));
 let country = "", view = "shift", sortKey = "date", sortDir = 1, open = new Set();
@@ -157,7 +159,10 @@ function ingest(data) {
     s.hay = (Object.values(s.answers).join(" ") + " " + s.store + " " + s.staff).toLowerCase();
   });
   $("client").textContent = D.client;
-  $("asat").innerHTML = `<span class="live"><span class="dot" aria-hidden="true"></span>Data updated ${esc(fmtDT(D.generated_at))}</span><br>Source: Mesh Circle (Salesforce)`;
+  showAsat();
+  const curM = $("month").value, months = [...new Set(D.shifts.map(s => s.date.slice(0, 7)))].sort().reverse();
+  $("month").innerHTML = `<option value="">All months</option>` + months.map(m => `<option value="${m}">${monthLabel(m)}</option>`).join("");
+  if (curM && months.includes(curM)) $("month").value = curM;
   const curW = $("week").value, weeks = [...new Set(D.shifts.map(s => s.week))].sort().reverse();
   $("week").innerHTML = weeks.map(w => `<option value="${w}">${weekLabel(w)}</option>`).join("") + `<option value="all">All weeks (${esc(D.period_label)})</option>`;
   if (curW && [...$("week").options].some(o => o.value === curW)) $("week").value = curW;
@@ -169,35 +174,36 @@ document.querySelectorAll("#view button").forEach(b => b.onclick = () => {
   view = b.dataset.v; document.querySelectorAll("#view button").forEach(x => x.setAttribute("aria-pressed", x === b));
   sortKey = view === "shift" ? "date" : "key"; sortDir = 1; render();
 });
-["week","fState","fStaff","fStore"].forEach(id => $(id).onchange = render);
+["fState","fStaff","fStore"].forEach(id => $(id).onchange = render);
+$("month").onchange = () => { if ($("month").value) $("week").value = "all"; render(); };   // a month shows all its weeks
+$("week").onchange = () => { if ($("week").value !== "all") $("month").value = ""; render(); };
 $("q").oninput = render;
-$("reset").onclick = () => { ["fState","fStaff","fStore"].forEach(id => $(id).value = ""); $("q").value = ""; render(); };
+$("reset").onclick = () => { ["month","fState","fStaff","fStore"].forEach(id => $(id).value = ""); $("q").value = ""; render(); };
 
 function filtered() {
-  const w = $("week").value, st = $("fState").value, sf = $("fStaff").value, so = $("fStore").value, q = $("q").value.trim().toLowerCase();
-  return D.shifts.filter(s => (!country || s.country === country) && (w === "all" || s.week === w) && (!st || s.state === st) && (!sf || s.staff === sf) && (!so || s.store === so) && (!q || s.hay.includes(q)));
+  const w = $("week").value, mo = $("month").value, st = $("fState").value, sf = $("fStaff").value, so = $("fStore").value, q = $("q").value.trim().toLowerCase();
+  return D.shifts.filter(s => (!country || s.country === country) && (w === "all" || s.week === w) && (!mo || s.date.startsWith(mo)) && (!st || s.state === st) && (!sf || s.staff === sf) && (!so || s.store === so) && (!q || s.hay.includes(q)));
 }
 function totals(rows) {
-  const t = {n: rows.length, hours: 0, demos: 0, units: 0, value: 0, val: {}, photos: 0, other: 0, machines: 0, m: Object.fromEntries(M.map(k => [k, 0])), stores: new Set(rows.map(r => r.store)).size, vis: [], est: false, pending: 0, fridgeBad: 0};
+  const t = {n: rows.length, hours: 0, demos: 0, units: 0, value: 0, val: {}, photos: 0, other: 0, machines: 0, m: Object.fromEntries(M.map(k => [k, 0])), stores: new Set(rows.map(r => r.store)).size, vis: [], est: false, pending: 0};
   rows.forEach(r => { t.val[r.currency] = (t.val[r.currency] || 0) + r.value; t.photos += r.photos.count; t.hours += r.hours; t.demos += r.demos; t.units += r.units; t.value += r.value; t.other += r.other; t.machines += r.machines; M.forEach(k => t.m[k] += r.m[k]);
-    if (r.visitors_n != null) t.vis.push(r.visitors_n); if (r.estimated) t.est = true; if (r.price_missing) t.missing = (t.missing || 0) + r.products.filter(p => p.match === "missing").length; if (r.status !== "Approved") t.pending++; if ((r.fridge_n ?? 0) > 5) t.fridgeBad++; });
+    if (r.visitors_n != null) t.vis.push(r.visitors_n); if (r.estimated) t.est = true; if (r.price_missing) t.missing = (t.missing || 0) + r.products.filter(p => p.match === "missing").length; if (r.status !== "Approved") t.pending++; });
   t.avgVis = t.vis.length ? t.vis.reduce((a, b) => a + b, 0) / t.vis.length : null;
   return t;
 }
 const num = (v, d = 0) => v ? nf(v, d) : `<span class="zero">0</span>`;
 
 function render() {
-  const rows = filtered(), T = totals(rows), w = $("week").value;
-  $("sub").textContent = (country ? country + " · " : "AU & NZ · ") + (w === "all" ? `${D.period_label}, all weeks` : `Week of ${weekLabel(w)}`) + ` · ${D.program}`;
+  const rows = filtered(), T = totals(rows), w = $("week").value, mo = $("month").value;
+  $("sub").textContent = (country ? country + " · " : "AU & NZ · ") + (mo ? monthLabel(mo) : w === "all" ? `${D.period_label}, all weeks` : `Week of ${weekLabel(w)}`) + ` · ${D.program}`;
   $("kpis").innerHTML = [
     ["hero", T.n, "Shifts"], ["", nf(T.hours, 1), "Hours"], ["", nf(T.demos), "Demos / tastings"],
     ["", T.n ? nf(T.demos / T.n, 1) : "–", "Demos per shift"], ["warm", nf(T.machines), "Coffee machines sold"],
-    ["", nf(T.other), "Other products sold"], ["warm", moneyBy(T) + (T.est ? "*" : ""), "Value at RRP"], ["", T.stores, "Stores"]
+    ["", nf(T.other), "Other products sold"], ["warm", moneyBy(T), "Value at RRP"], ["", T.stores, "Stores"]
   ].map(([c, v, l]) => `<div class="kpi ${c}"><b>${v}</b><span>${l}</span></div>`).join("");
   const n = [];
   if (T.pending) n.push(`${T.pending} shift${T.pending > 1 ? "s are" : " is"} submitted but not yet approved. Figures may change after review.`);
   if (T.missing) n.push(`Value leaves out ${T.missing} item(s) without a matched price. Open the shift to see which.`);
-  if (T.est) n.push(`* Value includes items where Salesforce doesn't record the exact model; the lowest matching RRP is used. Open a shift to see which.`);
   $("notices").innerHTML = n.map(x => `<div class="notice">${esc(x)}</div>`).join("");
   view === "shift" ? shiftTable(rows, T) : groupTable(rows, T);
   foot();
@@ -220,13 +226,12 @@ function shiftTable(rows, T) {
     {k: "hours", t: "Hours", num: 1}, {k: "demos", t: "Demos", num: 1}, ...M.map(m => ({k: "m_" + m, t: m, num: 1, title: m === "Semi" ? "Semi-automatic espresso machine" : m + " fully automatic"})),
     {k: "other", t: "Other", num: 1, title: "Other KitchenAid products sold. Open the shift for SKUs"}, {k: "value", t: "Value (RRP)", num: 1}, {k: "status", t: "Status", cls: "l"}, {k: "photos", t: "Photos", num: 1, title: "Photos attached to the timesheet. Opens Mesh Circle (login required)"},
     ...Q.map(q => ({k: "q_" + q.key, t: q.label, cls: "l q", title: q.full}))];
-  const get = {photos: r => r.photos.count, date: r => r.date + r.state, ...Object.fromEntries(M.map(m => ["m_" + m, r => r.m[m]])), ...Object.fromEntries(Q.map(q => ["q_" + q.key, r => q.key === "fridge" ? (r.fridge_n ?? -1) : q.key === "visitors" ? (r.visitors_n ?? -1) : r.answers[q.key]]))};
+  const get = {photos: r => r.photos.count, date: r => r.date + r.state, ...Object.fromEntries(M.map(m => ["m_" + m, r => r.m[m]])), ...Object.fromEntries(Q.map(q => ["q_" + q.key, r => q.key === "visitors" ? (r.visitors_n ?? -1) : r.answers[q.key]]))};
   const sorted = sortRows(rows, get);
   const qcell = (r, q) => {
     if (r.answers[q.key] == null) return `<td class="l short"><span class="zero">Not asked</span></td>`;
     const a = r.answers[q.key] || "";
-    if (q.key === "fridge") return `<td class="short ${r.fridge_n > 5 ? "bad" : ""}" title="${r.fridge_n > 5 ? "Above 5 °C: outside HACCP cold-chain limit" : ""}">${esc(a)}${r.fridge_n > 5 ? " ⚠" : ""}</td>`;
-    if (q.key === "milk_ok") return `<td class="ans short ${/^y/i.test(a) ? "" : "soft"}"><div>${esc(a)}</div></td>`;
+    if (q.key === "comments" && !a) return `<td class="l"><span class="zero">–</span></td>`;
     return `<td class="ans ${q.key === "traffic" || q.key === "visitors" || q.key === "competitor" ? "short" : ""}" title="${esc(a)}"><div>${esc(a)}</div></td>`;
   };
   const body = sorted.map(r => {
@@ -234,17 +239,17 @@ function shiftTable(rows, T) {
     const main = `<tr><td class="first"><button class="x" aria-expanded="${isOpen}" aria-label="${isOpen ? "Hide" : "Show"} shift details" data-id="${r.id}">${isOpen ? "−" : "+"}</button></td>
       <td class="l">${fmtD(r.date)}</td><td class="l">${r.state}</td><td class="l">${esc(r.store)}</td><td class="l">${esc(r.staff)}</td>
       <td>${nf(r.hours, 2)}</td><td>${r.demos}</td>${M.map(m => `<td>${num(r.m[m])}</td>`).join("")}
-      <td>${num(r.other)}</td><td>${r.value ? money(r.value, r.currency) : `<span class="zero">${money(0, r.currency)}</span>`}${r.estimated ? '<span class="est">*</span>' : ""}</td>
+      <td>${num(r.other)}</td><td>${r.value ? money(r.value, r.currency) : `<span class="zero">${money(0, r.currency)}</span>`}</td>
       <td class="l"><span class="pill ${r.status !== "Approved" ? "pend" : ""}">${r.status}</span></td>
       <td>${phLink(r)}</td>${Q.map(q => qcell(r, q)).join("")}</tr>`;
     if (!isOpen) return main;
-    const prod = r.products.length ? `<table class="mini"><tbody>${r.products.map(p => `<tr><td class="l">${esc(p.name)}<br><span class="pill">${esc(p.sku)}</span> <span class="pill">${esc(p.cat)}</span>${p.match === "estimated" ? ` <span class="est" title="${esc(p.note)}">* estimated price</span>` : p.match === "missing" ? ` <span class="est">no price found</span>` : ""}</td><td>${p.q} × ${money(p.rrp, r.currency)}</td></tr>`).join("")}</tbody></table>`
+    const prod = r.products.length ? `<table class="mini"><tbody>${r.products.map(p => `<tr><td class="l">${esc(p.name)}<br><span class="pill">${esc(p.sku)}</span> <span class="pill">${esc(p.cat)}</span>${p.match === "missing" ? ` <span class="est">no price found</span>` : ""}</td><td>${p.q} × ${money(p.rrp, r.currency)}</td></tr>`).join("")}</tbody></table>`
       : `<p class="zero">No products recorded on this shift.</p>`;
     const qa = `<dl>${Q.map(q => `<dt title="${esc(q.full)}">${esc(q.label)}</dt><dd>${r.answers[q.key] == null ? "Not asked" : esc(r.answers[q.key] || "–")}</dd>`).join("")}</dl>`;
-    return main + `<tr class="detail"><td class="first"></td><td colspan="${cols.length - 1}" class="l"><div class="detailgrid"><div><h3>Products sold · ${r.start}–${r.end}</h3>${prod}<p>${r.photos.count ? `<a class="ph" href="${esc(r.photos.link)}" target="_blank" rel="noopener">Open ${r.photos.count} attachment${r.photos.count > 1 ? "s" : ""} in Mesh Circle</a>` : `<span class="zero">No photos attached.</span>`}</p>${r.unlisted ? `<p class="est">${r.unlisted} unit(s) sold but not on the product list.</p>` : ""}</div><div><h3>Questionnaire</h3>${qa}</div></div></td></tr>`;
+    return main + `<tr class="detail"><td class="first"></td><td colspan="${cols.length - 1}" class="l"><div class="detailgrid"><div><h3>Products sold · ${r.start}–${r.end}</h3>${prod}<p>${r.photos.count ? `<a class="ph" href="${esc(r.photos.link)}" target="_blank" rel="noopener">Open ${r.photos.count} attachment${r.photos.count > 1 ? "s" : ""} in Mesh Circle</a>` : `<span class="zero">No photos attached.</span>`}</p>${r.unlisted ? `<p class="est">${r.unlisted} unit(s) sold but not on the product list.</p>` : ""}</div><div><h3>Questionnaire &amp; comments</h3>${qa}</div></div></td></tr>`;
   }).join("");
-  const foot = `<tfoot><tr><td class="first"></td><td class="l" colspan="4">Total · ${T.n} shifts · ${T.stores} stores</td><td>${nf(T.hours, 2)}</td><td>${nf(T.demos)}</td>${M.map(m => `<td>${T.m[m]}</td>`).join("")}<td>${T.other}</td><td>${moneyBy(T)}${T.est ? "*" : ""}</td><td class="l"></td><td>${T.photos}</td>
-    <td class="l">${trafficMix(rows)}</td><td class="l">${T.avgVis != null ? "Avg " + nf(T.avgVis, 1) : ""}</td>${"<td></td>".repeat(5)}<td class="l">${T.fridgeBad ? `<span style="color:var(--warn)">${T.fridgeBad} above 5 °C</span>` : ""}</td><td></td></tr></tfoot>`;
+  const foot = `<tfoot><tr><td class="first"></td><td class="l" colspan="4">Total · ${T.n} shifts · ${T.stores} stores</td><td>${nf(T.hours, 2)}</td><td>${nf(T.demos)}</td>${M.map(m => `<td>${T.m[m]}</td>`).join("")}<td>${T.other}</td><td>${moneyBy(T)}</td><td class="l"></td><td>${T.photos}</td>
+    <td class="l">${trafficMix(rows)}</td><td class="l">${T.avgVis != null ? "Avg " + nf(T.avgVis, 1) : ""}</td>${"<td></td>".repeat(Math.max(0, Q.length - 2))}</tr></tfoot>`;
   $("t").innerHTML = head(cols) + `<tbody>${body || `<tr><td class="empty" colspan="${cols.length}">No shifts match these filters. Clear the filters or pick another week.</td></tr>`}</tbody>` + foot;
   bindSort(cols);
   $("t").querySelectorAll("button.x").forEach(b => b.onclick = () => { const id = b.dataset.id; open.has(id) ? open.delete(id) : open.add(id); render(); });
@@ -271,15 +276,15 @@ function groupTable(rows, T) {
   const sorted = sortRows(groups, get);
   const disp = k => view === "date" ? fmtD(k) : esc(k);
   const body = sorted.map(r => `<tr><td class="l first">${disp(r.key)}</td>${cols[1].k === "extra" ? `<td class="l">${esc(r.extra)}</td>` : ""}<td>${r.n}</td><td>${nf(r.hours, 2)}</td><td>${nf(r.demos)}</td><td>${nf(r.per, 1)}</td>
-    ${M.map(m => `<td>${num(r.m[m])}</td>`).join("")}<td>${num(r.other)}</td><td>${moneyBy(r)}${r.est ? '<span class="est">*</span>' : ""}</td><td>${r.photos}</td><td>${r.avgVis != null ? nf(r.avgVis, 1) : "–"}</td><td class="l">${trafficMix(r.rs)}</td></tr>`).join("");
-  const foot = `<tfoot><tr><td class="l first">Total</td>${cols[1].k === "extra" ? "<td></td>" : ""}<td>${T.n}</td><td>${nf(T.hours, 2)}</td><td>${nf(T.demos)}</td><td>${T.n ? nf(T.demos / T.n, 1) : "–"}</td>${M.map(m => `<td>${T.m[m]}</td>`).join("")}<td>${T.other}</td><td>${moneyBy(T)}${T.est ? "*" : ""}</td><td>${T.photos}</td><td>${T.avgVis != null ? nf(T.avgVis, 1) : "–"}</td><td class="l">${trafficMix(rows)}</td></tr></tfoot>`;
+    ${M.map(m => `<td>${num(r.m[m])}</td>`).join("")}<td>${num(r.other)}</td><td>${moneyBy(r)}</td><td>${r.photos}</td><td>${r.avgVis != null ? nf(r.avgVis, 1) : "–"}</td><td class="l">${trafficMix(r.rs)}</td></tr>`).join("");
+  const foot = `<tfoot><tr><td class="l first">Total</td>${cols[1].k === "extra" ? "<td></td>" : ""}<td>${T.n}</td><td>${nf(T.hours, 2)}</td><td>${nf(T.demos)}</td><td>${T.n ? nf(T.demos / T.n, 1) : "–"}</td>${M.map(m => `<td>${T.m[m]}</td>`).join("")}<td>${T.other}</td><td>${moneyBy(T)}</td><td>${T.photos}</td><td>${T.avgVis != null ? nf(T.avgVis, 1) : "–"}</td><td class="l">${trafficMix(rows)}</td></tr></tfoot>`;
   $("t").innerHTML = head(cols) + `<tbody>${body || `<tr><td class="empty" colspan="${cols.length}">No shifts match these filters.</td></tr>`}</tbody>` + foot;
   bindSort(cols);
 }
 
 function foot() {
-  $("foot").innerHTML = `<p>One row per demo shift. Weeks run Monday to Sunday. Totals update with the filters. Tap + on a shift to see the SKUs sold and the full questionnaire answers. Data refreshes automatically from Salesforce; the page checks for new data every 5 minutes, or press Refresh.</p>
-  <p>AU and NZ values are shown separately in A$ and NZ$ and are never added together. Photos open the shift's attachments in Mesh Circle (login required). NZ shifts have no fridge-temperature question.</p>
+  $("foot").innerHTML = `<p>One row per demo shift. Weeks run Monday to Sunday. Totals update with the filters. Tap + on a shift to see the SKUs sold, the full questionnaire answers and the demonstrator's comments. Data refreshes automatically from Salesforce; the page checks for new data every 5 minutes, or press Refresh.</p>
+  <p>AU and NZ values are shown separately in A$ and NZ$ and are never added together. Photos open the shift's attachments in Mesh Circle (login required).</p>
   <p>Coffee machine columns combine all colours of each model. "Other" counts every other KitchenAid product. ${esc(D.price_source)}</p>
   <p>Value is indicative retail value at RRP, not what customers paid: in-store promotions (often 20% off) applied on many days. Units are as recorded by the demonstrator at point of sale.</p>
   <p>Foot traffic groups each answer by the lowest level mentioned ("light to medium" counts as Light). Avg visitors uses the first number given in question 2.</p>
@@ -302,10 +307,18 @@ $("csv").onclick = () => {
   }
   const blob = new Blob(["﻿" + lines.join("\r\n")], {type: "text/csv;charset=utf-8"});
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-  a.download = `KitchenAid_demos_${country || "AU-NZ"}_${$("week").value}_${view}.csv`; document.body.appendChild(a); a.click(); a.remove();
+  a.download = `KitchenAid_demos_${country || "AU-NZ"}_${$("month").value || $("week").value}_${view}.csv`; document.body.appendChild(a); a.click(); a.remove();
 };
 // ---------- secure loading + refresh ----------
-let PW = null, LAST = null, busy = false;
+let PW = null, LAST = null, busy = false, CHECKED = null;
+function showAsat() {
+  if (!D) return;
+  const chk = CHECKED && new Date(CHECKED) > new Date(D.generated_at) ? CHECKED : D.generated_at;
+  $("asat").innerHTML = `<span class="live"><span class="dot" aria-hidden="true"></span>Checked with Salesforce ${esc(fmtDT(chk))}</span><br>Last data change ${esc(fmtDT(D.generated_at))} · Source: Mesh Circle (Salesforce)`;
+}
+async function fetchStatus() {
+  try { const r = await fetch("status.json?t=" + Date.now(), {cache: "no-store"}); if (r.ok) { CHECKED = (await r.json()).checked || CHECKED; showAsat(); } } catch (e) {}
+}
 const b64 = x => Uint8Array.from(atob(x), c => c.charCodeAt(0));
 async function decrypt(blob, pw) {
   const km = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
@@ -322,6 +335,7 @@ async function refresh(manual) {
   if (busy || !PW) return; busy = true; const st = $("rstatus");
   if (manual) { st.textContent = "Checking…"; $("refresh").disabled = true; }
   try {
+    await fetchStatus();
     const blob = await fetchBlob();
     if (blob.g === LAST) { if (manual) st.textContent = "Up to date"; }
     else { ingest(await decrypt(blob, PW)); LAST = blob.g; st.textContent = manual ? "Updated" : "New data loaded"; }
@@ -333,7 +347,7 @@ setInterval(() => { if (document.visibilityState === "visible") refresh(false); 
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(false); });
 $("lockform").addEventListener("submit", async ev => {
   ev.preventDefault(); const msg = $("lockmsg"); msg.textContent = "Unlocking…";
-  try { const blob = await fetchBlob(); const data = await decrypt(blob, $("pw").value); PW = $("pw").value; LAST = blob.g; ingest(data); $("lock").remove(); }
+  try { const blob = await fetchBlob(); const data = await decrypt(blob, $("pw").value); PW = $("pw").value; LAST = blob.g; ingest(data); $("lock").remove(); fetchStatus(); }
   catch (e) { msg.textContent = /not available/.test(e.message) ? e.message : "Wrong password."; }
 });
 </script>

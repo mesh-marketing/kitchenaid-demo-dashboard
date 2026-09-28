@@ -2,9 +2,10 @@ name: Refresh dashboard data
 
 on:
   schedule:
-    # every 15 minutes, 6am–9pm Sydney time (cron is in UTC)
-    - cron: "*/15 20-23 * * *"
-    - cron: "*/15 0-10 * * *"
+    # about every 15 minutes, 6am–9pm Sydney time (cron is in UTC). Off-the-hour minutes because
+    # GitHub delays or drops runs scheduled on :00/:15/:30/:45 when it is busy.
+    - cron: "7,22,37,52 20-23 * * *"
+    - cron: "7,22,37,52 0-10 * * *"
   workflow_dispatch: {}        # "Run workflow" button in the Actions tab = refresh now
 
 permissions:
@@ -37,7 +38,7 @@ jobs:
         run: |
           git config user.name "dashboard-refresh"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data.enc.json checks.enc.json 2>/dev/null || git add data.enc.json
+          git add data.enc.json checks.enc.json status.json
           if git diff --cached --quiet; then echo "No change."; exit 0; fi
           git commit -m "Refresh data $(date -u +%Y-%m-%dT%H:%MZ)"
-          git push
+          git pull --rebase --quiet && git push

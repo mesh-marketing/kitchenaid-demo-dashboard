@@ -33,6 +33,7 @@ jobs:
           DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
           CHECKS_PASSWORD: ${{ secrets.CHECKS_PASSWORD }}
           REDACT_NAMES: ${{ secrets.REDACT_NAMES }}
+          DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
         run: python pipeline/refresh.py
       - name: Publish if changed
         run: |

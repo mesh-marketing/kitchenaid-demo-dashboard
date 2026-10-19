@@ -55,3 +55,17 @@ for m in _csv.DictReader(open(ROOT / "pipeline" / "price_map_au.csv", encoding="
 assert _wrong == 0 and _right >= 40, (_right, _wrong)
 assert _r.auto_match("COFFEE BEANS", _cat) is None and _r.auto_match("MILK JUG", _cat) is None
 print("OK: automatic price matching", _right, "right, 0 wrong")
+
+# price history: an RRP change applies from the day it is seen; earlier sales keep the old price
+import datetime as _dt
+_row = lambda sku, p, ca="": {"sku": sku, "title": "Thing", "variant": "", "price": p, "compare_at": ca}
+_h = _r.seed_history([_row("5KF2", "1099.00"), _row("5KX", "100.00", "129.00")], "2026-09-28")
+assert _r.rrp_at(_h, "5kx", _dt.date(2026, 1, 1)) == 129.0                        # RRP = 'was' price
+assert _r.update_history(_h, [_row("5KF2", "1099.00"), _row("5KX", "100.00", "129.00")], _dt.date(2026, 10, 18)) == []
+ch = _r.update_history(_h, [_row("5KF2", "899.00"), _row("5KNEW", "50.00")], _dt.date(2026, 10, 19))
+assert [c[0] for c in ch] == ["5KF2"], ch                                          # new product isn't a 'change'
+assert _r.rrp_at(_h, "5KF2", _dt.date(2026, 10, 18)) == 1099.0 and _r.rrp_at(_h, "5KF2", _dt.date(2026, 10, 19)) == 899.0
+assert _r.rrp_at(_h, "5KNEW", _dt.date(2026, 3, 1)) == 50.0 and _r.rrp_at(_h, "NOPE", _dt.date(2026, 3, 1)) is None
+_r.update_history(_h, [_row("5KF2", "1099.00")], _dt.date(2026, 10, 19))            # flips back the same day: no change recorded
+assert _h["skus"]["5KF2"] == [[_r.SEED_DATE, 1099.0]], _h["skus"]["5KF2"]
+print("OK: price history keeps each sale at the RRP of its date")

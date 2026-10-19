@@ -6,7 +6,7 @@ Runs in GitHub Actions (see .github/workflows/refresh.yml) or locally:
 
 Writes data.enc.json (AES-256-GCM, key from the dashboard password). Nothing readable is published.
 Internal warnings (drafts, duplicates, redactions, missing prices, HACCP) go to the GitHub job summary, never to the site.
-Prices: kitchenaid.com.au is read on every run (RRP = 'was' price if on promo, else price); unknown products are matched by name and listed on the checks page.
+Prices: kitchenaid.com.au is read on every run (RRP = 'was' price if on promo, else price); each sale keeps the RRP of its own date (price history inside the encrypted files); unknown products are matched by name and listed on the checks page.
 If Salesforce can't be reached, the previous data file is left untouched and the job fails (GitHub emails the repo owner).
 """
 import argparse, base64, csv, datetime as dt, json, os, re, sys
@@ -195,6 +195,52 @@ def fetch_catalogue():
     except Exception:
         return None
 
+SEED_DATE = "2000-01-01"     # "since before tracking started"
+def seed_history(rows, checked):
+    """Start the price history from a saved catalogue: those prices apply to every earlier sale."""
+    return {"checked": checked, "skus": {r["sku"].upper(): [[SEED_DATE, rrp_of(r)]] for r in rows if r["sku"]}}
+
+def update_history(hist, rows, today):
+    """Record today's website prices. A product's RRP change is dated today, so earlier sales keep the price they were sold at.
+    Returns a list of (sku, title, old, new) changes."""
+    changes, day = [], today.isoformat()
+    for r in rows:
+        if not r["sku"]: continue
+        sku, p = r["sku"].upper(), rrp_of(r)
+        h = hist["skus"].setdefault(sku, [])
+        if not h: h.append([SEED_DATE, p]); continue          # new on the website: no earlier price to keep
+        if abs(h[-1][1] - p) < 0.005: continue
+        old = h[-1][1]
+        if h[-1][0] == day:                                   # changed again the same day: keep the latest
+            h[-1][1] = p
+            if len(h) > 1 and abs(h[-2][1] - p) < 0.005: h.pop()
+        else: h.append([day, p])
+        changes.append((sku, f"{r['title']} {r['variant']}".strip(), old, p))
+    hist["checked"] = day
+    return changes
+
+def rrp_at(hist, sku, day):
+    """RRP in force on a sale date (the earliest known price for sales before tracking started). None if unknown."""
+    h = hist["skus"].get((sku or "").upper())
+    if not h: return None
+    d, best = day.isoformat(), h[0][1]
+    for since, p in h:
+        if since <= d: best = p
+    return best
+
+def unseal(blob, password):
+    """Decrypt a published file; None if missing, damaged or the password changed."""
+    if not password: return None
+    try:
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+        from cryptography.hazmat.primitives import hashes
+        d = lambda k: base64.b64decode(blob[k])
+        key = PBKDF2HMAC(hashes.SHA256(), 32, d("s"), int(blob["n"])).derive(password.encode())
+        return json.loads(AESGCM(key).decrypt(d("i"), d("c"), None))
+    except Exception:
+        return None
+
 _STOP = {"KITCHENAID", "THE", "WITH", "AND", "OF", "FOR", "IN"}
 _SYN = {"MATT": "MATTE", "GREY": "GRAY"}
 _MODEL = re.compile(r"K[A-Z]{1,5}\d{2,5}[A-Z0-9]*")
@@ -253,19 +299,34 @@ def main():
     live = None if a.fixtures else fetch_catalogue()
     cat_rows = live or list(csv.DictReader(open(ROOT / "pipeline" / "catalogue_au.tsv", encoding="utf-8"), delimiter="|"))
     cat_rows = [r for r in cat_rows if r["sku"]]
+    # price history (RRP per product with the date each price started) travels inside the encrypted files,
+    # so each sale keeps the RRP of its own date. Data file first, checks file as backup if one password changed.
+    cpw = os.environ.get("CHECKS_PASSWORD") or ("test-checks-password" if a.fixtures else None)
+    hist = None
+    for f, k in ((Path(a.out), pw), (Path(a.out).with_name("checks.enc.json"), cpw)):
+        if hist is None and f.exists():
+            try: hist = (unseal(json.loads(f.read_text()), k) or {}).get("price_history")
+            except Exception: hist = None
+    if not hist:
+        hist = seed_history(csv.DictReader(open(ROOT / "pipeline" / "catalogue_au.tsv", encoding="utf-8"), delimiter="|"), CFG["prices_checked"])
+        if not a.fixtures: warn(f"Price history started from the saved catalogue ({CFG['prices_checked']}): sales up to then use those prices; later RRP changes are dated as they're seen.")
+    if live:
+        for sku, title, o, n in update_history(hist, live, today):
+            warn(f"RRP changed on kitchenaid.com.au: {title} ({sku}) ${o:,.2f} → ${n:,.2f}. Sales from {today:%-d %b} use the new price; earlier sales keep the old one.")
+    CFG["prices_checked"] = hist["checked"]
     pmap = {r["sf_product"]: r for r in csv.DictReader(open(ROOT / "pipeline" / "price_map_au.csv", encoding="utf-8"), delimiter="|")}
     cat = {r["sku"].upper(): r for r in cat_rows}
     priced = set(CFG.get("priced_countries", ["AU"]))
     auto_seen = {}
-    def price(name, country):
+    def price(name, country, day):
         if country not in priced: return {"sku": "", "rrp": 0.0, "title": name, "match": "unpriced", "note": "No price list for this country yet"}
         if name in pmap:
-            r = pmap[name]; c = cat.get(r["sku"].upper())      # catalogue price wins, so every mapped product follows the website
-            rrp = rrp_of(c) if c else float(r["rrp"])
+            r = pmap[name]; rrp = rrp_at(hist, r["sku"], day)     # website price on the sale date; mapped RRP only if the SKU was never on the site
+            if rrp is None: rrp = float(r["rrp"])
             return {"sku": r["sku"], "rrp": rrp, "title": r["title"], "match": r["match"], "note": r["note"]}
         m = re.match(r"^\s*(5?K[A-Z]{1,4}\d{2,5}[A-Z0-9]*)\s*-", name)
         if m and m.group(1).upper() in cat:
-            c = cat[m.group(1).upper()]; return {"sku": c["sku"], "rrp": rrp_of(c), "title": c["title"], "match": "sku", "note": ""}
+            c = cat[m.group(1).upper()]; return {"sku": c["sku"], "rrp": rrp_at(hist, c["sku"], day) or rrp_of(c), "title": c["title"], "match": "sku", "note": ""}
         if name not in auto_seen:
             auto_seen[name] = auto_match(name, cat_rows)
             if auto_seen[name]:
@@ -274,12 +335,11 @@ def main():
                      + (" — loose match, shown as estimate" if loose else "") + ". If wrong, add the right SKU to pipeline/price_map_au.csv.")
         if auto_seen[name]:
             c, loose = auto_seen[name]
-            return {"sku": c["sku"], "rrp": rrp_of(c), "title": c["title"], "match": "estimated" if loose else "auto",
+            return {"sku": c["sku"], "rrp": rrp_at(hist, c["sku"], day) or rrp_of(c), "title": c["title"], "match": "estimated" if loose else "auto",
                     "note": "Matched automatically on kitchenaid.com.au" + (" (closest model, estimate)" if loose else "")}
         return None
 
-    if live: CFG["prices_checked"] = today.isoformat()
-    elif not a.fixtures: warn("Couldn't read kitchenaid.com.au this run — prices come from the saved catalogue (pipeline/catalogue_au.tsv).")
+    if not live and not a.fixtures: warn("Couldn't read kitchenaid.com.au this run — prices come from the saved catalogue (pipeline/catalogue_au.tsv).")
     pc = CFG.get("prices_checked")
     if pc and (today - dt.date.fromisoformat(pc)).days > CFG.get("prices_max_age_days", 30):
         warn(f"Prices are stale: catalogue last checked {pc} ({(today - dt.date.fromisoformat(pc)).days} days ago). Refresh pipeline/catalogue_au.tsv from kitchenaid.com.au and update prices_checked in config.json.")
@@ -324,7 +384,7 @@ def main():
         sid = s["Name"]; country = CFG["accounts"][s["RB_Customer__r"]["Name"]]; d = dt.date.fromisoformat(s["RB_Actual_Start_Date__c"])
         plist, est, missing = [], False, False
         for name, q in prods.get(sid, []):
-            p = price(name, country)
+            p = price(name, country, d)
             if p is None:
                 missing = True
                 if country == "AU": warn(f"No price for '{name}' (shift {sid}) — value excludes it. Add it to pipeline/price_map_au.csv.")
@@ -359,7 +419,7 @@ def main():
     data = {"client": CFG["client"], "program": CFG["program"], "generated_at": now.isoformat(timespec="minutes"), "data_as_at": today.isoformat(),
             "period_label": f"from {start.day} {start.strftime('%b')}", "window": [start.isoformat(), today.isoformat()],
             "questions": [{k: q[k] for k in ("key", "label", "full")} for q in CFG["questions"] if not q.get("internal")], "models": CFG["models"],
-            "price_source": CFG["price_source"].replace("{checked}", dt.date.fromisoformat(CFG["prices_checked"]).strftime("%-d %b %Y")), "shifts": rows,
+            "price_source": CFG["price_source"].replace("{checked}", dt.date.fromisoformat(CFG["prices_checked"]).strftime("%-d %b %Y")), "shifts": rows, "price_history": hist,
             "priced_currencies": sorted({"NZ": "NZD"}.get(c, "AUD") for c in priced)}
     # Refresh button: a narrow GitHub token (Actions write, this repo only) travels INSIDE the encrypted file,
     # so only people with the dashboard password can use it to start a refresh.
@@ -389,10 +449,9 @@ def main():
             AESGCM(key).decrypt(d("i"), d("c"), None); return True
         except Exception:
             return False
-    cpw = os.environ.get("CHECKS_PASSWORD") or ("test-checks-password" if a.fixtures else None)
     def write_checks():
         if not cpw: return
-        body = seal({"generated_at": now.isoformat(timespec="minutes"), "window": [start.isoformat(), today.isoformat()], "checks": WARN}, cpw)
+        body = seal({"generated_at": now.isoformat(timespec="minutes"), "window": [start.isoformat(), today.isoformat()], "checks": WARN, "price_history": hist}, cpw)
         body["g"] = now.isoformat(timespec="minutes"); body["k"] = len(WARN)
         chk = Path(a.out).with_name("checks.enc.json")
         try:
@@ -400,7 +459,7 @@ def main():
         except Exception:
             prev = {}
         import hashlib
-        hw = hashlib.sha256("\n".join(WARN).encode()).hexdigest()
+        hw = hashlib.sha256(("\n".join(WARN) + json.dumps(hist, sort_keys=True)).encode()).hexdigest()
         if prev.get("h") == hw and opens(prev, cpw): return            # same checks as last time: don't republish
         body["h"] = hw; chk.write_text(json.dumps(body))
     def write_status():

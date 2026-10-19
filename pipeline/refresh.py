@@ -229,8 +229,8 @@ def main():
     keep = []
     for s in shifts_raw:
         st = s["Status__c"]
-        if st == "Draft": warn(f"Shift {s['Name']} ({s['RB_Actual_Start_Date__c']}, {s['RB_Customer_Store__r']['Name']}) is a Draft — left out until submitted."); continue
-        if st not in ("Shift Submitted", "Shift Validated", "Approved"): warn(f"Shift {s['Name']} has status '{st}' — left out."); continue
+        if st == "Draft": warn(f"Shift {s['Name']} ({s['RB_Actual_Start_Date__c']}, {s['RB_Customer_Store__r']['Name']}) is a Draft — shown on the dashboard as Draft.")
+        elif st not in ("Shift Submitted", "Shift Validated", "Approved"): warn(f"Shift {s['Name']} has status '{st}' — left out."); continue
         if s["RB_Customer_Store__r"]["Name"] in CFG["exclude_stores"]: continue
         keep.append(s)
     groups = defaultdict(list)
@@ -279,7 +279,7 @@ def main():
             "retailer": retailer(s["RB_Customer_Store__r"]["Name"]), "staff": staff_name(s["Employee_Name__r"]["FirstName"], s["Employee_Name__r"]["LastName"]),
             "start": t(s["RB_Actual_Start_Time__c"]), "end": t(s["RB_Actual_End_Time__c"]), "hours": float(s["Shift_Duration_Hours__c"] or 0), "demos": int(s["Demos_and_Tastings__c"] or 0),
             "units": units, "unlisted": max(0, int(s["Total_Sales__c"] or 0) - int(s["Product_Sales__c"] or 0)),
-            "status": "Pending approval" if s["Status__c"] == "Shift Submitted" else "Approved",
+            "status": {"Draft": "Draft", "Shift Submitted": "Pending approval"}.get(s["Status__c"], "Approved"),
             "products": plist, "value": round(sum(p["value"] for p in plist), 2), "estimated": est, "price_missing": missing,
             "answers": ans, "visitors_n": first_num(ans.get("visitors")), "traffic_level": traffic(ans.get("traffic")),
             "country": country, "currency": "NZD" if country == "NZ" else "AUD",

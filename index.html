@@ -189,7 +189,7 @@ function filtered() {
 function totals(rows) {
   const t = {n: rows.length, hours: 0, demos: 0, units: 0, value: 0, val: {}, photos: 0, other: 0, machines: 0, m: Object.fromEntries(M.map(k => [k, 0])), stores: new Set(rows.map(r => r.store)).size, vis: [], est: false, pending: 0};
   rows.forEach(r => { t.val[r.currency] = (t.val[r.currency] || 0) + r.value; t.photos += r.photos.count; t.hours += r.hours; t.demos += r.demos; t.units += r.units; t.value += r.value; t.other += r.other; t.machines += r.machines; M.forEach(k => t.m[k] += r.m[k]);
-    if (r.visitors_n != null) t.vis.push(r.visitors_n); if (r.estimated) t.est = true; if (r.price_missing) t.missing = (t.missing || 0) + r.products.filter(p => p.match === "missing").length; if (r.status !== "Approved") t.pending++; });
+    if (r.visitors_n != null) t.vis.push(r.visitors_n); if (r.estimated) t.est = true; if (r.price_missing) t.missing = (t.missing || 0) + r.products.filter(p => p.match === "missing").length; if (r.status === "Draft") t.draft = (t.draft || 0) + 1; else if (r.status !== "Approved") t.pending++; });
   t.avgVis = t.vis.length ? t.vis.reduce((a, b) => a + b, 0) / t.vis.length : null;
   return t;
 }
@@ -204,6 +204,7 @@ function render() {
     ["", nf(T.other), "Other products sold"], ["warm", moneyBy(T), "Value at RRP"], ["", T.stores, "Stores"]
   ].map(([c, v, l]) => `<div class="kpi ${c}"><b>${v}</b><span>${l}</span></div>`).join("");
   const n = [];
+  if (T.draft) n.push(`${T.draft} shift${T.draft > 1 ? "s are" : " is"} still a draft (not yet submitted by the demonstrator). Figures may be incomplete.`);
   if (T.pending) n.push(`${T.pending} shift${T.pending > 1 ? "s are" : " is"} submitted but not yet approved. Figures may change after review.`);
   if (Object.keys(T.val).some(c => !priced(c))) n.push(`NZ value at RRP isn't shown yet: there's no NZ price list. Units sold are still counted.`);
   if (T.missing) n.push(`Value leaves out ${T.missing} item(s) without a matched price. Open the shift to see which.`);

@@ -26,7 +26,8 @@ with tempfile.TemporaryDirectory() as t:
     except SystemExit: raise
     except Exception: pass
 rows = {s["id"]: s for s in data["shifts"]}
-assert set(rows) == {"90001", "90002", "90003", "90005"}, sorted(rows)            # draft 90004 and duplicate 90006 left out
+assert set(rows) == {"90001", "90002", "90003", "90004", "90005"}, sorted(rows)   # duplicate 90006 left out; draft 90004 shown
+assert rows["90004"]["status"] == "Draft", rows["90004"]["status"]
 assert rows["90003"]["currency"] == "NZD" and rows["90001"]["currency"] == "AUD"
 assert rows["90001"]["value"] == 1599 and rows["90001"]["photos"]["count"] == 2 and rows["90001"]["answers"]["comments"] == "Great day"
 assert rows["90002"]["price_missing"] and rows["90002"]["value"] == 1599 and rows["90002"]["status"] == "Pending approval"

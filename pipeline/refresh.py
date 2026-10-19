@@ -177,13 +177,13 @@ def rrp_of(c):
     p = float(c["price"] or 0); ca = float(c["compare_at"] or 0)
     return max(p, ca)
 
-def fetch_catalogue():
-    """Current AU catalogue from kitchenaid.com.au (public Shopify feed). None if unreachable or implausibly small."""
+def fetch_catalogue(url=CAT_URL):
+    """Current catalogue from a KitchenAid website (public Shopify feed). None if unreachable or implausibly small."""
     try:
         import requests
         rows = []
         for page in range(1, 11):
-            r = requests.get(CAT_URL, params={"limit": 250, "page": page}, timeout=30, headers={"User-Agent": "Mesh-KitchenAid-dashboard/1.0"})
+            r = requests.get(url, params={"limit": 250, "page": page}, timeout=30, headers={"User-Agent": "Mesh-KitchenAid-dashboard/1.0"})
             r.raise_for_status(); prods = r.json().get("products", [])
             if not prods: break
             for p in prods:
@@ -260,6 +260,7 @@ def auto_match(name, rows):
     for c in rows:
         C = _toks(c["title"] + " " + c["variant"])
         if ("BUNDLE" in C or "+" in c["title"]) and "BUNDLE" not in S: continue
+        if c["title"].upper().startswith("BACKORDER"): continue
         if models and not models & C: continue
         inter = len(S & C)
         if inter: scored.append((inter / len(S | C), inter / len(S), c))
@@ -295,51 +296,65 @@ def main():
     qa_raw = sf.query("questionnaire", f"SELECT RB_Timesheet__r.Name, RB_Question__c, RB_Answer__c FROM RB_Questionnaire__c WHERE {F('RB_Timesheet__r.')} AND RB_Is_Deleted__c = false")
     files_raw = sf.query("files", f"SELECT LinkedEntityId, ContentDocument.FileExtension FROM ContentDocumentLink WHERE LinkedEntityId IN (SELECT Id FROM Timesheet__c WHERE {F()})")
 
-    # prices: live kitchenaid.com.au catalogue each run, saved copy as fallback
-    live = None if a.fixtures else fetch_catalogue()
-    cat_rows = live or list(csv.DictReader(open(ROOT / "pipeline" / "catalogue_au.tsv", encoding="utf-8"), delimiter="|"))
-    cat_rows = [r for r in cat_rows if r["sku"]]
-    # price history (RRP per product with the date each price started) travels inside the encrypted files,
+    # prices: each country's KitchenAid website is read every run (AU has a saved copy as fallback).
+    # A price history per country (RRP per product with the date each price started) travels inside the encrypted files,
     # so each sale keeps the RRP of its own date. Data file first, checks file as backup if one password changed.
+    priced = set(CFG.get("priced_countries", ["AU"]))
     cpw = os.environ.get("CHECKS_PASSWORD") or ("test-checks-password" if a.fixtures else None)
     hist = None
     for f, k in ((Path(a.out), pw), (Path(a.out).with_name("checks.enc.json"), cpw)):
         if hist is None and f.exists():
             try: hist = (unseal(json.loads(f.read_text()), k) or {}).get("price_history")
             except Exception: hist = None
-    if not hist:
-        hist = seed_history(csv.DictReader(open(ROOT / "pipeline" / "catalogue_au.tsv", encoding="utf-8"), delimiter="|"), CFG["prices_checked"])
-        if not a.fixtures: warn(f"Price history started from the saved catalogue ({CFG['prices_checked']}): sales up to then use those prices; later RRP changes are dated as they're seen.")
-    if live:
-        for sku, title, o, n in update_history(hist, live, today):
-            warn(f"RRP changed on kitchenaid.com.au: {title} ({sku}) ${o:,.2f} → ${n:,.2f}. Sales from {today:%-d %b} use the new price; earlier sales keep the old one.")
-    CFG["prices_checked"] = hist["checked"]
+    if hist and "skus" in hist: hist = {"AU": hist}                 # older single-country format
+    hist = hist or {}
+    cat_rows, cat = {}, {}
+    for cc, src in CFG["catalogues"].items():
+        if cc not in priced: continue
+        site = src["url"].split("/")[2]
+        saved = list(csv.DictReader(open(ROOT / "pipeline" / src["saved"], encoding="utf-8"), delimiter="|")) if src.get("saved") else []
+        live = None if a.fixtures else fetch_catalogue(src["url"])
+        if not live and not a.fixtures: warn(f"Couldn't read {site} this run — {cc} prices come from " + ("the saved catalogue." if saved else "the price history kept from earlier runs."))
+        if cc not in hist:
+            if saved:
+                hist[cc] = seed_history(saved, CFG["prices_checked"])
+                if not a.fixtures: warn(f"{cc} price history started from the saved catalogue ({CFG['prices_checked']}): sales up to then use those prices; later RRP changes are dated as they're seen.")
+            elif live:
+                hist[cc] = seed_history(live, today.isoformat())
+                warn(f"{cc} price history started today from {site}: earlier {cc} sales use today's prices; later RRP changes are dated as they're seen.")
+        if live and cc in hist:
+            for sku, title, o, n in update_history(hist[cc], live, today):
+                warn(f"RRP changed on {site}: {title} ({sku}) ${o:,.2f} → ${n:,.2f}. {cc} sales from {today:%-d %b} use the new price; earlier sales keep the old one.")
+        if cc not in hist: continue                                   # no prices at all yet: shown as "Not priced", never NZ$0
+        cat_rows[cc] = [r for r in (live or saved) if r["sku"]]
+        cat[cc] = {r["sku"].upper(): r for r in cat_rows[cc]}
+    if "AU" in hist: CFG["prices_checked"] = hist["AU"]["checked"]
+    # Salesforce product name → SKU (made for AU; SKUs are the same in NZ, prices come from each country's site)
     pmap = {r["sf_product"]: r for r in csv.DictReader(open(ROOT / "pipeline" / "price_map_au.csv", encoding="utf-8"), delimiter="|")}
-    cat = {r["sku"].upper(): r for r in cat_rows}
-    priced = set(CFG.get("priced_countries", ["AU"]))
     auto_seen = {}
     def price(name, country, day):
-        if country not in priced: return {"sku": "", "rrp": 0.0, "title": name, "match": "unpriced", "note": "No price list for this country yet"}
+        if country not in priced or country not in cat: return {"sku": "", "rrp": 0.0, "title": name, "match": "unpriced", "note": "No price list for this country yet"}
+        H, C, site = hist.get(country, {"skus": {}}), cat[country], CFG["catalogues"][country]["url"].split("/")[2]
         if name in pmap:
-            r = pmap[name]; rrp = rrp_at(hist, r["sku"], day)     # website price on the sale date; mapped RRP only if the SKU was never on the site
-            if rrp is None: rrp = float(r["rrp"])
-            return {"sku": r["sku"], "rrp": rrp, "title": r["title"], "match": r["match"], "note": r["note"]}
+            r = pmap[name]; rrp = rrp_at(H, r["sku"], day)       # website price on the sale date
+            if rrp is None and country == "AU": rrp = float(r["rrp"])    # mapped AU RRP only if the SKU was never on the site
+            if rrp is not None: return {"sku": r["sku"], "rrp": rrp, "title": r["title"], "match": r["match"], "note": r["note"]}
         m = re.match(r"^\s*(5?K[A-Z]{1,4}\d{2,5}[A-Z0-9]*)\s*-", name)
-        if m and m.group(1).upper() in cat:
-            c = cat[m.group(1).upper()]; return {"sku": c["sku"], "rrp": rrp_at(hist, c["sku"], day) or rrp_of(c), "title": c["title"], "match": "sku", "note": ""}
-        if name not in auto_seen:
-            auto_seen[name] = auto_match(name, cat_rows)
-            if auto_seen[name]:
-                c, loose = auto_seen[name]
-                warn(f"Priced automatically from kitchenaid.com.au: '{name}' → {c['title']} {c['variant']} ({c['sku']}) ${rrp_of(c):,.2f}"
+        if m and m.group(1).upper() in C:
+            c = C[m.group(1).upper()]; return {"sku": c["sku"], "rrp": rrp_at(H, c["sku"], day) or rrp_of(c), "title": c["title"], "match": "sku", "note": ""}
+        key = (country, name)
+        if key not in auto_seen:
+            auto_seen[key] = auto_match(name, cat_rows[country])
+            if auto_seen[key]:
+                c, loose = auto_seen[key]
+                warn(f"Priced automatically from {site}: '{name}' → {c['title']} {c['variant']} ({c['sku']}) ${rrp_of(c):,.2f}"
                      + (" — loose match, shown as estimate" if loose else "") + ". If wrong, add the right SKU to pipeline/price_map_au.csv.")
-        if auto_seen[name]:
-            c, loose = auto_seen[name]
-            return {"sku": c["sku"], "rrp": rrp_at(hist, c["sku"], day) or rrp_of(c), "title": c["title"], "match": "estimated" if loose else "auto",
-                    "note": "Matched automatically on kitchenaid.com.au" + (" (closest model, estimate)" if loose else "")}
+        if auto_seen[key]:
+            c, loose = auto_seen[key]
+            return {"sku": c["sku"], "rrp": rrp_at(H, c["sku"], day) or rrp_of(c), "title": c["title"], "match": "estimated" if loose else "auto",
+                    "note": f"Matched automatically on {site}" + (" (closest model, estimate)" if loose else "")}
         return None
 
-    if not live and not a.fixtures: warn("Couldn't read kitchenaid.com.au this run — prices come from the saved catalogue (pipeline/catalogue_au.tsv).")
     pc = CFG.get("prices_checked")
     if pc and (today - dt.date.fromisoformat(pc)).days > CFG.get("prices_max_age_days", 30):
         warn(f"Prices are stale: catalogue last checked {pc} ({(today - dt.date.fromisoformat(pc)).days} days ago). Refresh pipeline/catalogue_au.tsv from kitchenaid.com.au and update prices_checked in config.json.")
@@ -387,7 +402,7 @@ def main():
             p = price(name, country, d)
             if p is None:
                 missing = True
-                if country == "AU": warn(f"No price for '{name}' (shift {sid}) — value excludes it. Add it to pipeline/price_map_au.csv.")
+                if country in cat: warn(f"No price for '{name}' (shift {sid}) — value excludes it. Add it to pipeline/price_map_au.csv.")
                 p = {"sku": "", "rrp": 0.0, "title": name, "match": "missing", "note": "No price found"}
             est |= p["match"] == "estimated"
             plist.append({"name": clean_product_name(name), "sku": p["sku"], "q": q, "rrp": p["rrp"], "value": round(p["rrp"] * q, 2),
@@ -420,7 +435,7 @@ def main():
             "period_label": f"from {start.day} {start.strftime('%b')}", "window": [start.isoformat(), today.isoformat()],
             "questions": [{k: q[k] for k in ("key", "label", "full")} for q in CFG["questions"] if not q.get("internal")], "models": CFG["models"],
             "price_source": CFG["price_source"].replace("{checked}", dt.date.fromisoformat(CFG["prices_checked"]).strftime("%-d %b %Y")), "shifts": rows, "price_history": hist,
-            "priced_currencies": sorted({"NZ": "NZD"}.get(c, "AUD") for c in priced)}
+            "priced_currencies": sorted({"NZ": "NZD"}.get(c, "AUD") for c in cat)}
     # Refresh button: a narrow GitHub token (Actions write, this repo only) travels INSIDE the encrypted file,
     # so only people with the dashboard password can use it to start a refresh.
     if os.environ.get("DISPATCH_TOKEN") and not a.fixtures:

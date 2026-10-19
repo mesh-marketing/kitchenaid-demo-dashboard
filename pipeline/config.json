@@ -81,7 +81,7 @@
    "field": "RB_Comments__c"
   }
  ],
- "price_source": "AU: RRP from kitchenaid.com.au on the date of each sale (the site's 'compare at' price; current price where no RRP is shown), checked {checked}. NZ: no NZ price list yet, so NZ value is not shown.",
+ "price_source": "RRP from kitchenaid.com.au (AU, in A$) and kitchenaid.co.nz (NZ, in NZ$) on the date of each sale: the site's 'compare at' price, or the current price where no RRP is shown. Checked {checked}.",
  "redact": {
   "health_terms": [
    "parkinson",
@@ -106,7 +106,8 @@
  "prices_checked": "2026-09-28",
  "prices_max_age_days": 30,
  "priced_countries": [
-  "AU"
+  "AU",
+  "NZ"
  ],
  "review_terms": [
   "late",
@@ -164,5 +165,14 @@
   "Pat",
   "Max",
   "Major"
- ]
+ ],
+ "catalogues": {
+  "AU": {
+   "url": "https://kitchenaid.com.au/products.json",
+   "saved": "catalogue_au.tsv"
+  },
+  "NZ": {
+   "url": "https://kitchenaid.co.nz/products.json"
+  }
+ }
 }

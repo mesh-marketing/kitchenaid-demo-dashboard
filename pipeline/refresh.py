@@ -87,11 +87,48 @@ def category(text):
 def clean_product_name(p):
     return re.sub(r"^\s*\S*\d\S*\s*-\s*", "", p).replace("®", " ").strip() if re.match(r"^\s*\S*\d\S*\s*-", p) else p.replace("®", " ").strip()
 
+NM = r"[A-Z][A-Za-z'\-]+"
+ROLE_WORDS = r"(?i:manager|supervisor|csm|leader|asst|assistant|2ic|staff member)"   # case-insensitive here only
+NOT_NAMES = {"Yes", "No", "The", "Store", "Staff", "Myer", "Customer", "Customers", "Floor", "Section", "Team", "Asst", "Store Manager", "Both", "Also", "And"}
+FIRST_NAMES = {l.strip() for l in (ROOT / "pipeline" / "first_names.txt").read_text(encoding="utf-8").splitlines() if l.strip() and not l.startswith("#")}
+LEARNED = {}        # names found next to a role this run, e.g. "Zelda (Section Manager)" -> Zelda = the manager
+
+def learn_names(texts):
+    """Find people's names from context, so they are removed everywhere without anyone listing them first."""
+    for t in texts:
+        if not t: continue
+        for m in re.finditer(rf"\b({NM})(?:\s+(?:and|&)\s+({NM}))?\s*\(([^)]*?{ROLE_WORDS}[^)]*)\)", t):
+            for n in (m.group(1), m.group(2)):
+                if n and n[0].isupper() and n not in NOT_NAMES: LEARNED.setdefault(n, "the manager")
+        for m in re.finditer(rf"{ROLE_WORDS}s?\s*\(({NM})\)", t):
+            if m.group(1) not in NOT_NAMES: LEARNED.setdefault(m.group(1), "the manager")
+        for m in re.finditer(rf"\b(?:[Cc]ustomer|[Cc]ust)\s+({NM})\b", t):
+            n = m.group(1)   # only real first names: "a cust Zara" yes, "customer Most people" no
+            if n in FIRST_NAMES and n not in NOT_NAMES and n not in CFG.get("not_names", []): LEARNED.setdefault(n, "the customer")
+
+def redact_roles(out):
+    """'Zelda and Quincy (Section Managers)' -> 'the Section Managers'; 'Quincy (one of the managers)' -> 'one of the managers';
+    'one of the managers (Zelda)' -> 'one of the managers'."""
+    def name_role(m):
+        role = m.group(1).strip()
+        return role if role.lower().startswith(("one of", "a ", "an ", "the ")) else "the " + role
+    out = re.sub(rf"\b{NM}(?:\s+(?:and|&)\s+{NM})?\s*\(([^)]*?{ROLE_WORDS}[^)]*)\)", name_role, out)
+    out = re.sub(rf"({ROLE_WORDS}s?)\s*\({NM}\)", r"\1", out)
+    return out
+
 def redact(text, sid):
     if not text: return text
-    out = text
-    for name, role in sorted(NAMES.items(), key=lambda kv: -len(kv[0])):
-        out = re.sub(rf"\b{re.escape(name)}(?![\w])", role, out)
+    out = redact_roles(text)
+    for name, role in sorted({**LEARNED, **NAMES}.items(), key=lambda kv: -len(kv[0])):
+        def put(m, role=role):    # capitalise at the start of a sentence: "Quincy promised" -> "The manager promised"
+            start = m.start() == 0 or re.search(r"[.!?]\s*$|\n\s*$", out[:m.start()])
+            return role[0].upper() + role[1:] if start else role
+        if role == "the customer":   # "a cust Zara" -> "a cust"; "(Zara & Hubby)" -> dropped
+            out = re.sub(rf"\b([Cc]ust(?:omer)?)\.?\s+{re.escape(name)}\b", r"\1", out)
+            out = re.sub(rf"\s*\([^()]*\b{re.escape(name)}\b[^()]*\)", "", out)
+        out = re.sub(rf"\b{re.escape(name)}(?![\w])", put, out)
+    # tidy doubled replacements: "a staff member and a staff member" -> "two staff members"
+    out = re.sub(r"\b([Aa]|[Tt]he) (staff member|manager) and (?:a|the) \2\b", lambda m: ("T" if m.group(1)[0].isupper() else "t") + "wo " + m.group(2) + "s", out)
     out = re.sub(r"[\w.+-]+@[\w-]+\.[\w.]+", "[removed]", out)
     out = re.sub(r"\b(?:\+?61|0)[2-478](?:[ -]?\d){8}\b", "[removed]", out)
     for term in CFG["redact"]["health_terms"]:
@@ -102,12 +139,43 @@ def redact(text, sid):
             out = new; warn(f"Shift {sid}: removed a health-related detail from an answer — check it reads correctly.")
     return out
 
+def review(text, sid, where):
+    """Internal flags only (checks page). Nothing here changes what the client sees."""
+    if not text: return
+    for term in CFG.get("review_terms", []):
+        m = re.search(rf"\b{re.escape(term)}\b", text, re.I)
+        if m:
+            a = max(0, m.start() - 50); warn(f"Review before sharing: shift {where} mentions '{term}': …{text[a:m.end() + 50].strip()}…"); break
+    plain = re.sub(r"\bDavid\s+Jones\b", "", text, flags=re.I)        # the store, not a person
+    for w in sorted(set(re.findall(r"\b([A-Z][a-z]+)\b", plain))):
+        if w in FIRST_NAMES and w not in CFG.get("not_names", []):
+            warn(f"Possible person's name '{w}' in shift {where}. If it's a person, add it to the REDACT_NAMES secret.")
+
+def token_health(token, repo, today):
+    """Check the Refresh-button token. Returns (usable, public note). Fine-grained tokens report their expiry in a response header."""
+    import requests
+    try:
+        r = requests.get(f"https://api.github.com/repos/{repo}", headers={"Authorization": f"Bearer {token}"}, timeout=20)
+    except Exception:
+        return True, ""
+    if r.status_code in (401, 403):
+        warn("The DISPATCH_TOKEN (Refresh button) is invalid or expired: Refresh now only reloads saved data. Create a new token and update the secret.")
+        return False, "Refresh-button token invalid or expired."
+    exp = r.headers.get("github-authentication-token-expiration")
+    if exp:
+        days = (dt.date.fromisoformat(exp[:10]) - today).days
+        if days <= 21:
+            warn(f"The DISPATCH_TOKEN (Refresh button) expires in {days} days ({exp[:10]}). Create a new token and update the secret before then.")
+            return True, f"Refresh-button token expires {exp[:10]}."
+    return True, ""
+
 # ---------------- main ----------------
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fixtures"); ap.add_argument("--today"); ap.add_argument("--out", default=str(ROOT / "data.enc.json"))
     ap.add_argument("--plain", help="also write the unencrypted JSON here (local testing only, never commit)")
     a = ap.parse_args()
+    public_note = []
     tz = ZoneInfo(CFG["timezone"]); now = dt.datetime.now(tz)
     today = dt.date.fromisoformat(a.today) if a.today else now.date()
     start = monday(today) - dt.timedelta(weeks=CFG["weeks_back"] - 1)
@@ -129,13 +197,21 @@ def main():
     # prices
     pmap = {r["sf_product"]: r for r in csv.DictReader(open(ROOT / "pipeline" / "price_map_au.csv", encoding="utf-8"), delimiter="|")}
     cat = {r["sku"].upper(): r for r in csv.DictReader(open(ROOT / "pipeline" / "catalogue_au.tsv", encoding="utf-8"), delimiter="|") if r["sku"]}
+    priced = set(CFG.get("priced_countries", ["AU"]))
     def price(name, country):
-        if country != "AU": return None
-        if name in pmap: r = pmap[name]; return {"sku": r["sku"], "rrp": float(r["rrp"]), "title": r["title"], "match": r["match"], "note": r["note"]}
+        if country not in priced: return {"sku": "", "rrp": 0.0, "title": name, "match": "unpriced", "note": "No price list for this country yet"}
+        if name in pmap:
+            r = pmap[name]; c = cat.get(r["sku"].upper())      # live catalogue price wins, so refreshing catalogue_au.tsv updates every mapped product
+            rrp = float(c["compare_at"] or c["price"]) if c else float(r["rrp"])
+            return {"sku": r["sku"], "rrp": rrp, "title": r["title"], "match": r["match"], "note": r["note"]}
         m = re.match(r"^\s*(5?K[A-Z]{1,4}\d{2,5}[A-Z0-9]*)\s*-", name)
         if m and m.group(1).upper() in cat:
             c = cat[m.group(1).upper()]; return {"sku": c["sku"], "rrp": float(c["compare_at"] or c["price"]), "title": c["title"], "match": "sku", "note": ""}
         return None
+
+    pc = CFG.get("prices_checked")
+    if pc and (today - dt.date.fromisoformat(pc)).days > CFG.get("prices_max_age_days", 30):
+        warn(f"Prices are stale: catalogue last checked {pc} ({(today - dt.date.fromisoformat(pc)).days} days ago). Refresh pipeline/catalogue_au.tsv from kitchenaid.com.au and update prices_checked in config.json.")
 
     prods = defaultdict(list)
     for r in prods_raw: prods[r["Timesheet__r"]["Name"]].append((r["RB_Customer_Product__r"]["Name"], int(r.get("Quantity__c") or 1)))
@@ -145,6 +221,9 @@ def main():
         m = re.match(r"\s*(\d+)\.", r["RB_Question__c"] or "")
         if m and m.group(1) in qn: answers[r["RB_Timesheet__r"]["Name"]][qn[m.group(1)]] = (r["RB_Answer__c"] or "").strip()
     files = Counter(r["LinkedEntityId"] for r in files_raw)
+    learn_names([r["RB_Answer__c"] for r in qa_raw] + [s.get("RB_Comments__c") for s in shifts_raw])
+    if not NAMES: warn("The REDACT_NAMES secret is empty: only names found next to a role or after 'customer' are removed automatically.")
+    if LEARNED: warn("Names removed automatically this run: " + ", ".join(f"{k} → {v}" for k, v in sorted(LEARNED.items())))
 
     # statuses, drafts, duplicates
     keep = []
@@ -193,6 +272,8 @@ def main():
         for q in CFG["questions"]:
             if q.get("internal"): ans.pop(q["key"], None)          # HACCP answers stay in checks only, never on the client dashboard
             elif q.get("source") == "timesheet": ans[q["key"]] = redact((s.get(q["field"]) or "").strip(), sid)
+        where = f"{sid} ({d.isoformat()}, {title_store(s['RB_Customer_Store__r']['Name'])})"
+        for v in ans.values(): review(v, sid, where)
         t = lambda x: (x or "")[:5]
         rows.append({"id": sid, "date": d.isoformat(), "week": monday(d).isoformat(), "state": s["State__c"], "store": title_store(s["RB_Customer_Store__r"]["Name"]),
             "retailer": retailer(s["RB_Customer_Store__r"]["Name"]), "staff": staff_name(s["Employee_Name__r"]["FirstName"], s["Employee_Name__r"]["LastName"]),
@@ -207,11 +288,15 @@ def main():
     data = {"client": CFG["client"], "program": CFG["program"], "generated_at": now.isoformat(timespec="minutes"), "data_as_at": today.isoformat(),
             "period_label": f"from {start.day} {start.strftime('%b')}", "window": [start.isoformat(), today.isoformat()],
             "questions": [{k: q[k] for k in ("key", "label", "full")} for q in CFG["questions"] if not q.get("internal")], "models": CFG["models"],
-            "price_source": CFG["price_source"], "shifts": rows}
+            "price_source": CFG["price_source"], "shifts": rows,
+            "priced_currencies": sorted({"NZ": "NZD"}.get(c, "AUD") for c in priced)}
     # Refresh button: a narrow GitHub token (Actions write, this repo only) travels INSIDE the encrypted file,
     # so only people with the dashboard password can use it to start a refresh.
-    if os.environ.get("DISPATCH_TOKEN"):
-        data["dispatch"] = {"token": os.environ["DISPATCH_TOKEN"], "repo": os.environ.get("GITHUB_REPOSITORY", "mesh-marketing/kitchenaid-demo-dashboard")}
+    if os.environ.get("DISPATCH_TOKEN") and not a.fixtures:
+        repo = os.environ.get("GITHUB_REPOSITORY", "mesh-marketing/kitchenaid-demo-dashboard")
+        ok, exp = token_health(os.environ["DISPATCH_TOKEN"], repo, today)
+        if ok: data["dispatch"] = {"token": os.environ["DISPATCH_TOKEN"], "repo": repo}   # an expired token is left out, so Refresh falls back to the saved data
+        if exp: public_note.append(exp)
 
     def seal(obj, password):
         from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -251,6 +336,7 @@ def main():
         # public, unencrypted: only the time of the last successful Salesforce check (no client data)
         Path(a.out).with_name("status.json").write_text(json.dumps({"checked": now.isoformat(timespec="minutes")}))
     def public_log(msg):
+        for extra in public_note: msg += " " + extra
         print(msg)
         if os.environ.get("GITHUB_STEP_SUMMARY"):
             with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f: f.write(msg + "\n")

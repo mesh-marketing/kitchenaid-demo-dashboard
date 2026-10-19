@@ -81,7 +81,7 @@
    "field": "RB_Comments__c"
   }
  ],
- "price_source": "AU: RRP from kitchenaid.com.au (the site's 'compare at' price; current price where no RRP is shown), checked 28 Sep 2026. NZ: no NZ price list yet; NZ$ value shows 0 until one is added.",
+ "price_source": "AU: RRP from kitchenaid.com.au (the site's 'compare at' price; current price where no RRP is shown), checked 28 Sep 2026. NZ: no NZ price list yet, so NZ value is not shown.",
  "redact": {
   "health_terms": [
    "parkinson",
@@ -102,5 +102,67 @@
    "surgery"
   ],
   "names_to_roles_secret": "REDACT_NAMES"
- }
+ },
+ "prices_checked": "2026-09-28",
+ "prices_max_age_days": 30,
+ "priced_countries": [
+  "AU"
+ ],
+ "review_terms": [
+  "late",
+  "sorry",
+  "sick",
+  "rude",
+  "difficult customer",
+  "complain",
+  "complaint",
+  "faulty",
+  "broken",
+  "injured",
+  "police",
+  "drunk",
+  "chinese",
+  "indian",
+  "asian",
+  "ethnic"
+ ],
+ "not_names": [
+  "Mark",
+  "Matt",
+  "Amber",
+  "Stan",
+  "Will",
+  "Rose",
+  "Ruby",
+  "Jade",
+  "Pearl",
+  "Olive",
+  "Honey",
+  "Ivy",
+  "Holly",
+  "Daisy",
+  "Hazel",
+  "Grace",
+  "Faith",
+  "Hope",
+  "Joy",
+  "June",
+  "May",
+  "April",
+  "Summer",
+  "Sunny",
+  "Sage",
+  "Basil",
+  "Juniper",
+  "Hubby",
+  "Father",
+  "Mother",
+  "Bill",
+  "Frank",
+  "Gene",
+  "Guy",
+  "Pat",
+  "Max",
+  "Major"
+ ]
 }

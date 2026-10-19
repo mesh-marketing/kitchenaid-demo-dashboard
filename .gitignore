@@ -1,4 +1,4 @@
 # never publish readable data
-tests/
+tests/real/
 *.plain.json
 __pycache__/

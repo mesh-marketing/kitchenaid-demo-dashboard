@@ -1,0 +1,156 @@
+{
+ "body": {
+  "records": [
+   {
+    "Id": "a0X000000000001",
+    "Name": "90001",
+    "RB_Customer__r": {
+     "Name": "KitchenAid"
+    },
+    "RB_Actual_Start_Date__c": "2026-09-26",
+    "RB_Actual_Start_Time__c": "10:00:00",
+    "RB_Actual_End_Time__c": "14:00:00",
+    "RB_Customer_Store__r": {
+     "Name": "MYER TESTVILLE"
+    },
+    "State__c": "NSW",
+    "Employee_Name__r": {
+     "FirstName": "Test",
+     "LastName": "Alpha"
+    },
+    "Shift_Duration_Hours__c": 4,
+    "Demos_and_Tastings__c": 12,
+    "Product_Sales__c": 1,
+    "Total_Sales__c": 1,
+    "Status__c": "Approved",
+    "CreatedDate": "2026-09-26T05:00:00Z",
+    "RB_Comments__c": "Great day"
+   },
+   {
+    "Id": "a0X000000000002",
+    "Name": "90002",
+    "RB_Customer__r": {
+     "Name": "KitchenAid"
+    },
+    "RB_Actual_Start_Date__c": "2026-09-26",
+    "RB_Actual_Start_Time__c": "11:00:00",
+    "RB_Actual_End_Time__c": "15:00:00",
+    "RB_Customer_Store__r": {
+     "Name": "DAVID JONES TESTVILLE"
+    },
+    "State__c": "VIC",
+    "Employee_Name__r": {
+     "FirstName": "Test",
+     "LastName": "Beta"
+    },
+    "Shift_Duration_Hours__c": 4,
+    "Demos_and_Tastings__c": 8,
+    "Product_Sales__c": 2,
+    "Total_Sales__c": 3,
+    "Status__c": "Shift Submitted",
+    "CreatedDate": "2026-09-26T06:00:00Z",
+    "RB_Comments__c": ""
+   },
+   {
+    "Id": "a0X000000000003",
+    "Name": "90003",
+    "RB_Customer__r": {
+     "Name": "KitchenAid NZ"
+    },
+    "RB_Actual_Start_Date__c": "2026-09-27",
+    "RB_Actual_Start_Time__c": "11:00:00",
+    "RB_Actual_End_Time__c": "15:00:00",
+    "RB_Customer_Store__r": {
+     "Name": "JB HI FI TESTLAND"
+    },
+    "State__c": "Auckland",
+    "Employee_Name__r": {
+     "FirstName": "Test",
+     "LastName": "Gamma"
+    },
+    "Shift_Duration_Hours__c": 4,
+    "Demos_and_Tastings__c": 20,
+    "Product_Sales__c": 0,
+    "Total_Sales__c": 0,
+    "Status__c": "Approved",
+    "CreatedDate": "2026-09-27T06:00:00Z",
+    "RB_Comments__c": ""
+   },
+   {
+    "Id": "a0X000000000004",
+    "Name": "90004",
+    "RB_Customer__r": {
+     "Name": "KitchenAid"
+    },
+    "RB_Actual_Start_Date__c": "2026-09-27",
+    "RB_Actual_Start_Time__c": "11:00:00",
+    "RB_Actual_End_Time__c": "15:00:00",
+    "RB_Customer_Store__r": {
+     "Name": "MYER DRAFTTOWN"
+    },
+    "State__c": "QLD",
+    "Employee_Name__r": {
+     "FirstName": "Test",
+     "LastName": "Delta"
+    },
+    "Shift_Duration_Hours__c": 4,
+    "Demos_and_Tastings__c": 5,
+    "Product_Sales__c": 0,
+    "Total_Sales__c": 0,
+    "Status__c": "Draft",
+    "CreatedDate": "2026-09-27T06:00:00Z",
+    "RB_Comments__c": ""
+   },
+   {
+    "Id": "a0X000000000005",
+    "Name": "90005",
+    "RB_Customer__r": {
+     "Name": "KitchenAid"
+    },
+    "RB_Actual_Start_Date__c": "2026-09-27",
+    "RB_Actual_Start_Time__c": "11:00:00",
+    "RB_Actual_End_Time__c": "15:00:00",
+    "RB_Customer_Store__r": {
+     "Name": "MYER DUPTOWN"
+    },
+    "State__c": "WA",
+    "Employee_Name__r": {
+     "FirstName": "Test",
+     "LastName": "Echo"
+    },
+    "Shift_Duration_Hours__c": 4,
+    "Demos_and_Tastings__c": 10,
+    "Product_Sales__c": 0,
+    "Total_Sales__c": 0,
+    "Status__c": "Approved",
+    "CreatedDate": "2026-09-27T05:00:00Z",
+    "RB_Comments__c": ""
+   },
+   {
+    "Id": "a0X000000000006",
+    "Name": "90006",
+    "RB_Customer__r": {
+     "Name": "KitchenAid"
+    },
+    "RB_Actual_Start_Date__c": "2026-09-27",
+    "RB_Actual_Start_Time__c": "11:30:00",
+    "RB_Actual_End_Time__c": "15:00:00",
+    "RB_Customer_Store__r": {
+     "Name": "MYER DUPTOWN"
+    },
+    "State__c": "WA",
+    "Employee_Name__r": {
+     "FirstName": "Test",
+     "LastName": "Echo"
+    },
+    "Shift_Duration_Hours__c": 3.5,
+    "Demos_and_Tastings__c": 10,
+    "Product_Sales__c": 0,
+    "Total_Sales__c": 0,
+    "Status__c": "Approved",
+    "CreatedDate": "2026-09-27T07:00:00Z",
+    "RB_Comments__c": ""
+   }
+  ]
+ }
+}

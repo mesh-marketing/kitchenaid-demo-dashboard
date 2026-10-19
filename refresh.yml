@@ -1,0 +1,63 @@
+name: Refresh dashboard data
+
+on:
+  schedule:
+    # about every 15 minutes, 6am–9pm Sydney time (cron is in UTC). Off-the-hour minutes because
+    # GitHub delays or drops runs scheduled on :00/:15/:30/:45 when it is busy.
+    - cron: "8,23,38,53 20-23 * * *"
+    - cron: "8,23,38,53 0-10 * * *"
+  workflow_dispatch: {}        # "Run workflow" button in the Actions tab = refresh now
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+      - run: pip install --quiet -r pipeline/requirements.txt
+      - name: Regression test (synthetic data, no network)
+        run: python -I tests/test_refresh.py
+      - name: Pull Salesforce and build encrypted data
+        env:
+          SF_DOMAIN: ${{ secrets.SF_DOMAIN }}
+          SF_CLIENT_ID: ${{ secrets.SF_CLIENT_ID }}
+          SF_CLIENT_SECRET: ${{ secrets.SF_CLIENT_SECRET }}
+          DASHBOARD_PASSWORD: ${{ secrets.DASHBOARD_PASSWORD }}
+          CHECKS_PASSWORD: ${{ secrets.CHECKS_PASSWORD }}
+          REDACT_NAMES: ${{ secrets.REDACT_NAMES }}
+          DISPATCH_TOKEN: ${{ secrets.DISPATCH_TOKEN }}
+        run: python pipeline/refresh.py
+      - name: Publish if changed
+        run: |
+          git config user.name "dashboard-refresh"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data.enc.json checks.enc.json status.json
+          if git diff --cached --quiet; then echo "No change."; exit 0; fi
+          git commit -m "Refresh data $(date -u +%Y-%m-%dT%H:%MZ)"
+          git pull --rebase --quiet && git push
+      - name: Alert on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # one open issue at a time; GitHub emails repo watchers. Repeat failures add a comment instead of new issues.
+          n=$(gh issue list --state open --label refresh-failure --json number --jq '.[0].number')
+          if [ -z "$n" ]; then
+            gh label create refresh-failure --color B3261E 2>/dev/null || true
+            gh issue create --title "Dashboard refresh is failing" --label refresh-failure --body "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Usual causes: Salesforce credentials or Run-As user changed, API limit, or a changed field. The dashboard keeps showing the last good data and its banner warns when it is more than 2h old."
+          else
+            gh issue comment "$n" --body "Still failing: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          fi

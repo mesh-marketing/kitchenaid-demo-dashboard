@@ -1,0 +1,33 @@
+{
+ "body": {
+  "records": [
+   {
+    "Timesheet__r": {
+     "Name": "90001"
+    },
+    "RB_Customer_Product__r": {
+     "Name": "KF4 Fully Automatic Espresso Machine Matte Black"
+    },
+    "Quantity__c": 1
+   },
+   {
+    "Timesheet__r": {
+     "Name": "90002"
+    },
+    "RB_Customer_Product__r": {
+     "Name": "KF4 Fully Automatic Espresso Machine Matte Black"
+    },
+    "Quantity__c": 1
+   },
+   {
+    "Timesheet__r": {
+     "Name": "90002"
+    },
+    "RB_Customer_Product__r": {
+     "Name": "MYSTERY GADGET NOT IN CATALOGUE"
+    },
+    "Quantity__c": 1
+   }
+  ]
+ }
+}

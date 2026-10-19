@@ -1,0 +1,18 @@
+{
+ "body": {
+  "records": [
+   {
+    "LinkedEntityId": "a0X000000000001",
+    "ContentDocument": {
+     "FileExtension": "jpg"
+    }
+   },
+   {
+    "LinkedEntityId": "a0X000000000001",
+    "ContentDocument": {
+     "FileExtension": "jpg"
+    }
+   }
+  ]
+ }
+}

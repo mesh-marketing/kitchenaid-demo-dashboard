@@ -101,6 +101,7 @@ footer p{margin:4px 0}
   <div><div class="client" id="client"></div><h1>Coffee demo weekly report</h1><div class="sub" id="sub"></div></div>
   <div class="asat" id="asat"></div>
 </header>
+<div id="stale" role="status"></div>
 
 <div class="controls" role="region" aria-label="Filters">
   <span class="lbl">Country</span>
@@ -135,7 +136,8 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 const nf = (n, d = 0) => Number(n).toLocaleString("en-AU", {minimumFractionDigits: d, maximumFractionDigits: d});
 const CUR = {AUD: "A$", NZD: "NZ$"};
 const money = (n, c = "AUD") => (CUR[c] || "$") + nf(n, 0);
-const moneyBy = t => { const parts = Object.entries(t.val).sort().map(([c, v]) => money(v, c)); return parts.length ? parts.join(" · ") : money(0); };
+const priced = c => !D.priced_currencies || D.priced_currencies.includes(c);
+const moneyBy = t => { const parts = Object.entries(t.val).filter(([c]) => priced(c)).sort().map(([c, v]) => money(v, c)); return parts.length ? parts.join(" · ") : `<span class="zero">Not priced</span>`; };
 const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const pd = s => { const [y,m,d] = s.split("-").map(Number); return new Date(Date.UTC(y, m-1, d)); };
@@ -203,6 +205,7 @@ function render() {
   ].map(([c, v, l]) => `<div class="kpi ${c}"><b>${v}</b><span>${l}</span></div>`).join("");
   const n = [];
   if (T.pending) n.push(`${T.pending} shift${T.pending > 1 ? "s are" : " is"} submitted but not yet approved. Figures may change after review.`);
+  if (Object.keys(T.val).some(c => !priced(c))) n.push(`NZ value at RRP isn't shown yet: there's no NZ price list. Units sold are still counted.`);
   if (T.missing) n.push(`Value leaves out ${T.missing} item(s) without a matched price. Open the shift to see which.`);
   $("notices").innerHTML = n.map(x => `<div class="notice">${esc(x)}</div>`).join("");
   view === "shift" ? shiftTable(rows, T) : groupTable(rows, T);
@@ -236,17 +239,17 @@ function shiftTable(rows, T) {
   };
   const body = sorted.map(r => {
     const isOpen = open.has(r.id);
-    const main = `<tr><td class="first"><button class="x" aria-expanded="${isOpen}" aria-label="${isOpen ? "Hide" : "Show"} shift details" data-id="${r.id}">${isOpen ? "−" : "+"}</button></td>
-      <td class="l">${fmtD(r.date)}</td><td class="l">${r.state}</td><td class="l">${esc(r.store)}</td><td class="l">${esc(r.staff)}</td>
+    const main = `<tr><td class="first"><button class="x" aria-expanded="${isOpen}" aria-label="${isOpen ? "Hide" : "Show"} shift details" data-id="${esc(r.id)}">${isOpen ? "−" : "+"}</button></td>
+      <td class="l">${fmtD(r.date)}</td><td class="l">${esc(r.state)}</td><td class="l">${esc(r.store)}</td><td class="l">${esc(r.staff)}</td>
       <td>${nf(r.hours, 2)}</td><td>${r.demos}</td>${M.map(m => `<td>${num(r.m[m])}</td>`).join("")}
-      <td>${num(r.other)}</td><td>${r.value ? money(r.value, r.currency) : `<span class="zero">${money(0, r.currency)}</span>`}</td>
+      <td>${num(r.other)}</td><td>${!priced(r.currency) ? `<span class="zero">–</span>` : r.value ? money(r.value, r.currency) : `<span class="zero">${money(0, r.currency)}</span>`}</td>
       <td class="l"><span class="pill ${r.status !== "Approved" ? "pend" : ""}">${r.status}</span></td>
       <td>${phLink(r)}</td>${Q.map(q => qcell(r, q)).join("")}</tr>`;
     if (!isOpen) return main;
-    const prod = r.products.length ? `<table class="mini"><tbody>${r.products.map(p => `<tr><td class="l">${esc(p.name)}<br><span class="pill">${esc(p.sku)}</span> <span class="pill">${esc(p.cat)}</span>${p.match === "missing" ? ` <span class="est">no price found</span>` : ""}</td><td>${p.q} × ${money(p.rrp, r.currency)}</td></tr>`).join("")}</tbody></table>`
+    const prod = r.products.length ? `<table class="mini"><tbody>${r.products.map(p => `<tr><td class="l">${esc(p.name)}<br><span class="pill">${esc(p.sku)}</span> <span class="pill">${esc(p.cat)}</span>${p.match === "missing" ? ` <span class="est">no price found</span>` : ""}</td><td>${p.q}${priced(r.currency) ? " × " + money(p.rrp, r.currency) : ""}</td></tr>`).join("")}</tbody></table>`
       : `<p class="zero">No products recorded on this shift.</p>`;
     const qa = `<dl>${Q.map(q => `<dt title="${esc(q.full)}">${esc(q.label)}</dt><dd>${r.answers[q.key] == null ? "Not asked" : esc(r.answers[q.key] || "–")}</dd>`).join("")}</dl>`;
-    return main + `<tr class="detail"><td class="first"></td><td colspan="${cols.length - 1}" class="l"><div class="detailgrid"><div><h3>Products sold · ${r.start}–${r.end}</h3>${prod}<p>${r.photos.count ? `<a class="ph" href="${esc(r.photos.link)}" target="_blank" rel="noopener">Open ${r.photos.count} attachment${r.photos.count > 1 ? "s" : ""} in Mesh Circle</a>` : `<span class="zero">No photos attached.</span>`}</p>${r.unlisted ? `<p class="est">${r.unlisted} unit(s) sold but not on the product list.</p>` : ""}</div><div><h3>Questionnaire &amp; comments</h3>${qa}</div></div></td></tr>`;
+    return main + `<tr class="detail"><td class="first"></td><td colspan="${cols.length - 1}" class="l"><div class="detailgrid"><div><h3>Products sold · ${esc(r.start)}–${esc(r.end)}</h3>${prod}<p>${r.photos.count ? `<a class="ph" href="${esc(r.photos.link)}" target="_blank" rel="noopener">Open ${r.photos.count} attachment${r.photos.count > 1 ? "s" : ""} in Mesh Circle</a>` : `<span class="zero">No photos attached.</span>`}</p>${r.unlisted ? `<p class="est">${r.unlisted} unit(s) sold but not on the product list.</p>` : ""}</div><div><h3>Questionnaire &amp; comments</h3>${qa}</div></div></td></tr>`;
   }).join("");
   const foot = `<tfoot><tr><td class="first"></td><td class="l" colspan="4">Total · ${T.n} shifts · ${T.stores} stores</td><td>${nf(T.hours, 2)}</td><td>${nf(T.demos)}</td>${M.map(m => `<td>${T.m[m]}</td>`).join("")}<td>${T.other}</td><td>${moneyBy(T)}</td><td class="l"></td><td>${T.photos}</td>
     <td class="l">${trafficMix(rows)}</td><td class="l">${T.avgVis != null ? "Avg " + nf(T.avgVis, 1) : ""}</td>${"<td></td>".repeat(Math.max(0, Q.length - 2))}</tr></tfoot>`;
@@ -314,6 +317,9 @@ let PW = null, LAST = null, busy = false, CHECKED = null;
 function showAsat() {
   if (!D) return;
   const chk = CHECKED && new Date(CHECKED) > new Date(D.generated_at) ? CHECKED : D.generated_at;
+  const age = Date.now() - new Date(chk).getTime(), hr = +new Intl.DateTimeFormat("en-AU", {hour: "numeric", hour12: false, timeZone: "Australia/Sydney"}).format(new Date()) % 24;
+  // refreshes run 6am-9pm Sydney: warn if a daytime check is over 2h old, or anything is over 20h old
+  $("stale").innerHTML = CHECKED && (age > 20 * 3600e3 || (age > 2 * 3600e3 && hr >= 8 && hr < 21)) ? `<div class="notice" style="background:var(--warn-bg)">Data may be out of date: last checked with Salesforce ${esc(fmtDT(chk))}. Press Refresh, or let Mesh know if this persists.</div>` : "";
   $("asat").innerHTML = `<span class="live"><span class="dot" aria-hidden="true"></span>Checked with Salesforce ${esc(fmtDT(chk))}</span><br>Last data change ${esc(fmtDT(D.generated_at))} · Source: Mesh Circle (Salesforce)`;
 }
 async function fetchStatus() {
@@ -372,7 +378,7 @@ setInterval(() => { if (document.visibilityState === "visible") refresh(false); 
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(false); });
 $("lockform").addEventListener("submit", async ev => {
   ev.preventDefault(); const msg = $("lockmsg"); msg.textContent = "Unlocking…";
-  try { const blob = await fetchBlob(); const data = await decrypt(blob, $("pw").value); PW = $("pw").value; LAST = blob.g; ingest(data); $("lock").remove(); fetchStatus(); }
+  try { const blob = await fetchBlob(); const data = await decrypt(blob, $("pw").value); PW = $("pw").value; LAST = blob.g; await fetchStatus(); ingest(data); $("lock").remove(); }
   catch (e) { msg.textContent = /not available/.test(e.message) ? e.message : "Wrong password."; }
 });
 </script>

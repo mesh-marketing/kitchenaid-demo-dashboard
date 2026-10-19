@@ -14,7 +14,9 @@ Rules, identical to the approved manual build:
 - Possible duplicates (same person, store, date and overlapping hours): the later entry is left out and listed in checks.
 - Value at RRP comes from `pipeline/price_map_au.csv` and `catalogue_au.tsv` (kitchenaid.com.au, checked 28 Sep 2026). Unknown products are valued at 0 and listed in checks.
 - Answers: questions 1–7 plus the timesheet "Comments." field. HACCP answers (fridge temperature, milk & equipment) are not shown to the client; any issue is listed in checks.html.
-- Health details (and any retailer staff names set in the `REDACT_NAMES` secret) are removed automatically. Mesh still reviews checks.html.
+- Names: retailer staff named next to their role ("Zelda (Section Manager)") and customers named after "customer"/"cust" are replaced automatically everywhere ("the manager", "the customer"). Other names go in the `REDACT_NAMES` secret. Any first name still visible is listed on checks.html as "Possible person's name".
+- Health details, emails and phone numbers are removed automatically.
+- Answers that may need a look before the client sees them (lateness, sick staff, complaints, faulty stock, remarks about ethnicity) are listed on checks.html as "Review before sharing". They are not changed automatically.
 - AU and NZ values are kept separate (A$ and NZ$).
 
 ## One-time setup (about 20 minutes)
@@ -36,7 +38,18 @@ Rules, identical to the approved manual build:
 
 **4. First run.** Open Actions → Refresh dashboard data → Run workflow, and check that it goes green.
 
-## Maintenance
+## Maintenance (weekly, 5 minutes)
+Open checks.html each Monday. Act on:
+- **Possible person's name:** add it to the `REDACT_NAMES` secret (JSON, e.g. `{"Zelda": "a staff member"}`) and run the workflow.
+- **No price for …:** add a line to `pipeline/price_map_au.csv` (copy the SKU and RRP from `catalogue_au.tsv`).
+- **Prices are stale (monthly):** refresh `pipeline/catalogue_au.tsv` from kitchenaid.com.au/products.json (needs a browser; ask Claude: "refresh the KitchenAid price catalogue") and update `prices_checked` in `pipeline/config.json`.
+- **DISPATCH_TOKEN expires in N days:** create a new token (same settings) and update the secret.
+- **Review before sharing / HACCP:** follow up with the demonstrator; edit the answer in Salesforce if it shouldn't be client-facing.
+- **A refresh failure** opens a GitHub issue (once the proposed workflow is in), and the dashboard shows a red "may be out of date" banner if no check has succeeded for 2 hours in the daytime.
+
+Before changing `pipeline/refresh.py`, run `python tests/test_refresh.py` (synthetic data only, no client data, no network).
+
+## Other notes
 - New product with no price: it appears in checks. Add a line to `price_map_au.csv`.
 - Change a password: update the secret, then run the workflow. The files are re-encrypted with the new password on that run, and the old one stops working.
 - Scheduled workflows pause after 60 days without any repo activity. The data commits normally count as activity; if demos stop for two months, re-enable the workflow in Actions.

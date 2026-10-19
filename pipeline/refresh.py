@@ -6,6 +6,7 @@ Runs in GitHub Actions (see .github/workflows/refresh.yml) or locally:
 
 Writes data.enc.json (AES-256-GCM, key from the dashboard password). Nothing readable is published.
 Internal warnings (drafts, duplicates, redactions, missing prices, HACCP) go to the GitHub job summary, never to the site.
+Prices: kitchenaid.com.au is read on every run (RRP = 'was' price if on promo, else price); unknown products are matched by name and listed on the checks page.
 If Salesforce can't be reached, the previous data file is left untouched and the job fails (GitHub emails the repo owner).
 """
 import argparse, base64, csv, datetime as dt, json, os, re, sys
@@ -169,6 +170,60 @@ def token_health(token, repo, today):
             return True, f"Refresh-button token expires {exp[:10]}."
     return True, ""
 
+# ---------------- prices ----------------
+CAT_URL = "https://kitchenaid.com.au/products.json"
+def rrp_of(c):
+    """RRP = the 'was' price when on promotion, else the selling price."""
+    p = float(c["price"] or 0); ca = float(c["compare_at"] or 0)
+    return max(p, ca)
+
+def fetch_catalogue():
+    """Current AU catalogue from kitchenaid.com.au (public Shopify feed). None if unreachable or implausibly small."""
+    try:
+        import requests
+        rows = []
+        for page in range(1, 11):
+            r = requests.get(CAT_URL, params={"limit": 250, "page": page}, timeout=30, headers={"User-Agent": "Mesh-KitchenAid-dashboard/1.0"})
+            r.raise_for_status(); prods = r.json().get("products", [])
+            if not prods: break
+            for p in prods:
+                for v in p.get("variants", []):
+                    rows.append({"handle": p["handle"], "title": p["title"], "type": p.get("product_type", ""),
+                                 "variant": "" if v.get("title") == "Default Title" else v.get("title", ""), "sku": (v.get("sku") or "").strip(),
+                                 "price": v.get("price") or "0", "compare_at": v.get("compare_at_price") or "", "available": "1" if v.get("available") else "0"})
+        return rows if len(rows) >= 100 else None
+    except Exception:
+        return None
+
+_STOP = {"KITCHENAID", "THE", "WITH", "AND", "OF", "FOR", "IN"}
+_SYN = {"MATT": "MATTE", "GREY": "GRAY"}
+_MODEL = re.compile(r"K[A-Z]{1,5}\d{2,5}[A-Z0-9]*")
+def _toks(s):
+    t = re.findall(r"[A-Z0-9][A-Z0-9.]*", s.upper().replace("®", " ").replace("™", " "))
+    t = [re.sub(r"^5(K[A-Z]{1,5}\d)", r"\1", _SYN.get(w, w).strip(".")) for w in t]
+    return {w for w in t if w and w not in _STOP}
+
+def auto_match(name, rows):
+    """Match a Salesforce product name to a website product by words (model, type, colour).
+    Tested on the hand-made price map: 42 of 43 right, 0 wrong, 1 left unmatched. Returns (row, loose) or None.
+    Unsure → None (shows 'no price found') rather than a wrong price. Several equally good matches → lowest price, marked loose."""
+    S = _toks(name)
+    if not S: return None
+    models = {w for w in S if _MODEL.fullmatch(w)}
+    scored = []
+    for c in rows:
+        C = _toks(c["title"] + " " + c["variant"])
+        if ("BUNDLE" in C or "+" in c["title"]) and "BUNDLE" not in S: continue
+        if models and not models & C: continue
+        inter = len(S & C)
+        if inter: scored.append((inter / len(S | C), inter / len(S), c))
+    if not scored: return None
+    j, cov, _ = max(scored, key=lambda x: x[0])
+    if cov < 0.75 or j < 0.5: return None
+    ties = [x[2] for x in scored if x[0] >= j - 1e-9]
+    best = min(ties, key=rrp_of)
+    return best, (len({rrp_of(c) for c in ties}) > 1 or j < 0.7)
+
 # ---------------- main ----------------
 def main():
     ap = argparse.ArgumentParser()
@@ -194,21 +249,37 @@ def main():
     qa_raw = sf.query("questionnaire", f"SELECT RB_Timesheet__r.Name, RB_Question__c, RB_Answer__c FROM RB_Questionnaire__c WHERE {F('RB_Timesheet__r.')} AND RB_Is_Deleted__c = false")
     files_raw = sf.query("files", f"SELECT LinkedEntityId, ContentDocument.FileExtension FROM ContentDocumentLink WHERE LinkedEntityId IN (SELECT Id FROM Timesheet__c WHERE {F()})")
 
-    # prices
+    # prices: live kitchenaid.com.au catalogue each run, saved copy as fallback
+    live = None if a.fixtures else fetch_catalogue()
+    cat_rows = live or list(csv.DictReader(open(ROOT / "pipeline" / "catalogue_au.tsv", encoding="utf-8"), delimiter="|"))
+    cat_rows = [r for r in cat_rows if r["sku"]]
     pmap = {r["sf_product"]: r for r in csv.DictReader(open(ROOT / "pipeline" / "price_map_au.csv", encoding="utf-8"), delimiter="|")}
-    cat = {r["sku"].upper(): r for r in csv.DictReader(open(ROOT / "pipeline" / "catalogue_au.tsv", encoding="utf-8"), delimiter="|") if r["sku"]}
+    cat = {r["sku"].upper(): r for r in cat_rows}
     priced = set(CFG.get("priced_countries", ["AU"]))
+    auto_seen = {}
     def price(name, country):
         if country not in priced: return {"sku": "", "rrp": 0.0, "title": name, "match": "unpriced", "note": "No price list for this country yet"}
         if name in pmap:
-            r = pmap[name]; c = cat.get(r["sku"].upper())      # live catalogue price wins, so refreshing catalogue_au.tsv updates every mapped product
-            rrp = float(c["compare_at"] or c["price"]) if c else float(r["rrp"])
+            r = pmap[name]; c = cat.get(r["sku"].upper())      # catalogue price wins, so every mapped product follows the website
+            rrp = rrp_of(c) if c else float(r["rrp"])
             return {"sku": r["sku"], "rrp": rrp, "title": r["title"], "match": r["match"], "note": r["note"]}
         m = re.match(r"^\s*(5?K[A-Z]{1,4}\d{2,5}[A-Z0-9]*)\s*-", name)
         if m and m.group(1).upper() in cat:
-            c = cat[m.group(1).upper()]; return {"sku": c["sku"], "rrp": float(c["compare_at"] or c["price"]), "title": c["title"], "match": "sku", "note": ""}
+            c = cat[m.group(1).upper()]; return {"sku": c["sku"], "rrp": rrp_of(c), "title": c["title"], "match": "sku", "note": ""}
+        if name not in auto_seen:
+            auto_seen[name] = auto_match(name, cat_rows)
+            if auto_seen[name]:
+                c, loose = auto_seen[name]
+                warn(f"Priced automatically from kitchenaid.com.au: '{name}' → {c['title']} {c['variant']} ({c['sku']}) ${rrp_of(c):,.2f}"
+                     + (" — loose match, shown as estimate" if loose else "") + ". If wrong, add the right SKU to pipeline/price_map_au.csv.")
+        if auto_seen[name]:
+            c, loose = auto_seen[name]
+            return {"sku": c["sku"], "rrp": rrp_of(c), "title": c["title"], "match": "estimated" if loose else "auto",
+                    "note": "Matched automatically on kitchenaid.com.au" + (" (closest model, estimate)" if loose else "")}
         return None
 
+    if live: CFG["prices_checked"] = today.isoformat()
+    elif not a.fixtures: warn("Couldn't read kitchenaid.com.au this run — prices come from the saved catalogue (pipeline/catalogue_au.tsv).")
     pc = CFG.get("prices_checked")
     if pc and (today - dt.date.fromisoformat(pc)).days > CFG.get("prices_max_age_days", 30):
         warn(f"Prices are stale: catalogue last checked {pc} ({(today - dt.date.fromisoformat(pc)).days} days ago). Refresh pipeline/catalogue_au.tsv from kitchenaid.com.au and update prices_checked in config.json.")
@@ -288,7 +359,7 @@ def main():
     data = {"client": CFG["client"], "program": CFG["program"], "generated_at": now.isoformat(timespec="minutes"), "data_as_at": today.isoformat(),
             "period_label": f"from {start.day} {start.strftime('%b')}", "window": [start.isoformat(), today.isoformat()],
             "questions": [{k: q[k] for k in ("key", "label", "full")} for q in CFG["questions"] if not q.get("internal")], "models": CFG["models"],
-            "price_source": CFG["price_source"], "shifts": rows,
+            "price_source": CFG["price_source"].replace("{checked}", dt.date.fromisoformat(CFG["prices_checked"]).strftime("%-d %b %Y")), "shifts": rows,
             "priced_currencies": sorted({"NZ": "NZD"}.get(c, "AUD") for c in priced)}
     # Refresh button: a narrow GitHub token (Actions write, this repo only) travels INSIDE the encrypted file,
     # so only people with the dashboard password can use it to start a refresh.

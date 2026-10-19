@@ -81,7 +81,7 @@
    "field": "RB_Comments__c"
   }
  ],
- "price_source": "AU: RRP from kitchenaid.com.au (the site's 'compare at' price; current price where no RRP is shown), checked 28 Sep 2026. NZ: no NZ price list yet, so NZ value is not shown.",
+ "price_source": "AU: RRP from kitchenaid.com.au (the site's 'compare at' price; current price where no RRP is shown), checked {checked}. NZ: no NZ price list yet, so NZ value is not shown.",
  "redact": {
   "health_terms": [
    "parkinson",

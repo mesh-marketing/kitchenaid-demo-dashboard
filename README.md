@@ -12,7 +12,7 @@ Weekly in-store demo dashboard for KitchenAid AU & NZ, refreshed automatically f
 Rules, identical to the approved manual build:
 - Statuses: Submitted (shown as pending approval), Validated and Approved are included. Drafts are shown with a "Draft" status and a note that figures may be incomplete.
 - Possible duplicates (same person, store, date and overlapping hours): the later entry is left out and listed in checks.
-- Value at RRP comes from `pipeline/price_map_au.csv` and `catalogue_au.tsv` (kitchenaid.com.au, checked 28 Sep 2026). Unknown products are valued at 0 and listed in checks.
+- Value at RRP: every refresh reads the live price list from kitchenaid.com.au (RRP = the 'was' price during promotions, else the price). Products in `pipeline/price_map_au.csv` use their mapped SKU. Any other product is matched to the website by name (model, type, colour) and listed in checks as "Priced automatically"; loose matches show as estimates. Products it can't match confidently are valued at 0 and listed in checks — never guessed. If the website can't be reached, the saved `catalogue_au.tsv` is used and checks says so.
 - Answers: questions 1–7 plus the timesheet "Comments." field. HACCP answers (fridge temperature, milk & equipment) are not shown to the client; any issue is listed in checks.html.
 - Names: retailer staff named next to their role ("Zelda (Section Manager)") and customers named after "customer"/"cust" are replaced automatically everywhere ("the manager", "the customer"). Other names go in the `REDACT_NAMES` secret. Any first name still visible is listed on checks.html as "Possible person's name".
 - Health details, emails and phone numbers are removed automatically.
@@ -41,8 +41,9 @@ Rules, identical to the approved manual build:
 ## Maintenance (weekly, 5 minutes)
 Open checks.html each Monday. Act on:
 - **Possible person's name:** add it to the `REDACT_NAMES` secret (JSON, e.g. `{"Zelda": "a staff member"}`) and run the workflow.
-- **No price for …:** add a line to `pipeline/price_map_au.csv` (copy the SKU and RRP from `catalogue_au.tsv`).
-- **Prices are stale (monthly):** refresh `pipeline/catalogue_au.tsv` from kitchenaid.com.au/products.json (needs a browser; ask Claude: "refresh the KitchenAid price catalogue") and update `prices_checked` in `pipeline/config.json`.
+- **Priced automatically …:** check the match. If it's wrong, add a line to `pipeline/price_map_au.csv` with the right SKU.
+- **No price for …:** no confident match on the website (or not sold there). Add a line to `pipeline/price_map_au.csv`.
+- **Couldn't read kitchenaid.com.au / Prices are stale:** only appears if the website has been unreachable from GitHub. Usually clears on the next run; if it persists, ask Claude to check.
 - **DISPATCH_TOKEN expires in N days:** create a new token (same settings) and update the secret.
 - **Review before sharing / HACCP:** follow up with the demonstrator; edit the answer in Salesforce if it shouldn't be client-facing.
 - **A refresh failure** opens a GitHub issue (once the proposed workflow is in), and the dashboard shows a red "may be out of date" banner if no check has succeeded for 2 hours in the daytime.

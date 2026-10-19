@@ -40,3 +40,18 @@ joined = " | ".join(chk)
 for needle in ("Draft", "Possible duplicate", "No price for", "HACCP", "health-related"):
     assert needle in joined, f"missing check: {needle}"
 print("OK: all checks passed;", len(rows), "shifts,", len(chk), "internal checks")
+
+# automatic price matching: every hand-matched product must match the same SKU or price, or not at all (never a wrong price)
+import csv as _csv
+sys.path.insert(0, str(ROOT / "pipeline")); import refresh as _r
+_cat = [c for c in _csv.DictReader(open(ROOT / "pipeline" / "catalogue_au.tsv", encoding="utf-8"), delimiter="|") if c["sku"]]
+_right = _wrong = 0
+for m in _csv.DictReader(open(ROOT / "pipeline" / "price_map_au.csv", encoding="utf-8"), delimiter="|"):
+    if m["match"] != "name": continue
+    got = _r.auto_match(m["sf_product"], _cat)
+    if not got: continue
+    if got[0]["sku"].upper() == m["sku"].upper() or abs(_r.rrp_of(got[0]) - float(m["rrp"])) < 0.01: _right += 1
+    else: _wrong += 1; print("WRONG auto price:", m["sf_product"], "->", got[0]["title"], got[0]["variant"])
+assert _wrong == 0 and _right >= 40, (_right, _wrong)
+assert _r.auto_match("COFFEE BEANS", _cat) is None and _r.auto_match("MILK JUG", _cat) is None
+print("OK: automatic price matching", _right, "right, 0 wrong")

@@ -318,9 +318,9 @@ let PW = null, LAST = null, busy = false, CHECKED = null;
 function showAsat() {
   if (!D) return;
   const chk = CHECKED && new Date(CHECKED) > new Date(D.generated_at) ? CHECKED : D.generated_at;
-  const age = Date.now() - new Date(chk).getTime(), hr = +new Intl.DateTimeFormat("en-AU", {hour: "numeric", hour12: false, timeZone: "Australia/Sydney"}).format(new Date()) % 24;
-  // refreshes run 6am-9pm Sydney: warn if a daytime check is over 2h old, or anything is over 20h old
-  $("stale").innerHTML = CHECKED && (age > 20 * 3600e3 || (age > 2 * 3600e3 && hr >= 8 && hr < 21)) ? `<div class="notice" style="background:var(--warn-bg)">Data may be out of date: last checked with Salesforce ${esc(fmtDT(chk))}. Press Refresh, or let Mesh know if this persists.</div>` : "";
+  const age = Date.now() - new Date(chk).getTime();
+  // an automatic refresh runs each morning (Refresh button for anything fresher): warn only if a morning run was missed
+  $("stale").innerHTML = CHECKED && age > 26 * 3600e3 ? `<div class="notice" style="background:var(--warn-bg)">Data may be out of date: last checked with Salesforce ${esc(fmtDT(chk))}. Press Refresh to pull the latest, or let Mesh know if this persists.</div>` : "";
   $("asat").innerHTML = `<span class="live"><span class="dot" aria-hidden="true"></span>Checked with Salesforce ${esc(fmtDT(chk))}</span><br>Last data change ${esc(fmtDT(D.generated_at))} · Source: Mesh Circle (Salesforce)`;
 }
 async function fetchStatus() {

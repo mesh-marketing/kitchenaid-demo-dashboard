@@ -280,8 +280,7 @@ def main():
     public_note = []
     tz = ZoneInfo(CFG["timezone"]); now = dt.datetime.now(tz)
     today = dt.date.fromisoformat(a.today) if a.today else now.date()
-    start = monday(today) - dt.timedelta(weeks=CFG["weeks_back"] - 1)
-    start = min(start, start.replace(day=1))   # begin on the 1st so the Month filter shows whole months
+    start = dt.date.fromisoformat(CFG["start_date"])   # whole program from this date (1 July 2026)
     sf = Fixtures(a.fixtures) if a.fixtures else Salesforce(os.environ["SF_DOMAIN"], os.environ["SF_CLIENT_ID"], os.environ["SF_CLIENT_SECRET"])
     pw = os.environ.get("DASHBOARD_PASSWORD") or ("test-password-only" if a.fixtures else None)
     if not pw or len(pw) < 14: raise SystemExit("DASHBOARD_PASSWORD missing or too short (min 14 characters).")
@@ -432,7 +431,7 @@ def main():
             "photos": {"count": files.get(s["Id"], 0), "link": f"https://meshcircle.my.site.com/customer/s/relatedlist/{s['Id'][:15]}/AttachedContentDocuments"}})
     rows.sort(key=lambda r: (r["date"], r["country"], r["state"], r["store"]))
     data = {"client": CFG["client"], "program": CFG["program"], "generated_at": now.isoformat(timespec="minutes"), "data_as_at": today.isoformat(),
-            "period_label": f"from {start.day} {start.strftime('%b')}", "window": [start.isoformat(), today.isoformat()],
+            "period_label": f"from {start.day} {start.strftime('%b %Y')}", "window": [start.isoformat(), today.isoformat()],
             "questions": [{k: q[k] for k in ("key", "label", "full")} for q in CFG["questions"] if not q.get("internal")], "models": CFG["models"],
             "price_source": CFG["price_source"].replace("{checked}", dt.date.fromisoformat(CFG["prices_checked"]).strftime("%-d %b %Y")), "shifts": rows, "price_history": hist,
             "priced_currencies": sorted({"NZ": "NZD"}.get(c, "AUD") for c in cat)}

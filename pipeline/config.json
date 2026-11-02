@@ -6,7 +6,6 @@
   "KitchenAid NZ": "NZ"
  },
  "business_unit": "Demo",
- "weeks_back": 9,
  "timezone": "Australia/Sydney",
  "models": [
   "KF2",
@@ -174,5 +173,6 @@
   "NZ": {
    "url": "https://kitchenaid.co.nz/products.json"
   }
- }
+ },
+ "start_date": "2026-07-01"
 }

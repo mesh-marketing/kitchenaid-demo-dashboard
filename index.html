@@ -286,14 +286,7 @@ function groupTable(rows, T) {
   bindSort(cols);
 }
 
-function foot() {
-  $("foot").innerHTML = `<p>One row per demo shift. Weeks run Monday to Sunday. Totals update with the filters. Tap + on a shift to see the SKUs sold, the full questionnaire answers and the demonstrator's comments. Data refreshes automatically from Salesforce; the page checks for new data every 5 minutes, and Refresh pulls straight from Salesforce (about a minute).</p>
-  <p>AU and NZ values are shown separately in A$ and NZ$ and are never added together. Photos open the shift's attachments in Mesh Circle (login required).</p>
-  <p>Coffee machine columns combine all colours of each model. "Other" counts every other KitchenAid product. ${esc(D.price_source)}</p>
-  <p>Value is indicative retail value at RRP, not what customers paid: in-store promotions (often 20% off) applied on many days. Units are as recorded by the demonstrator at point of sale.</p>
-  <p>Foot traffic groups each answer by the lowest level mentioned ("light to medium" counts as Light). Avg visitors uses the first number given in question 2.</p>
-  <p>Prepared by Mesh Marketing.</p>`;
-}
+function foot() { $("foot").innerHTML = ""; }   // client-facing: no explanatory footer
 
 // CSV of the current view (full answers)
 $("csv").onclick = () => {

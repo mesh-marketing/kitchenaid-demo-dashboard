@@ -273,7 +273,7 @@ const num = (v, d = 0) => v ? nf(v, d) : `<span class="zero">0</span>`;
 
 function render() {
   const rows = filtered(), T = totals(rows), w = $("week").value, mo = $("month").value;
-  $("sub").textContent = (country ? country + " · " : "AU & NZ · ") + (mo ? monthLabel(mo) : w === "all" ? `${D.period_label}, all weeks` : `Week of ${weekLabel(w)}`) + ` · ${D.program}`;
+  $("sub").textContent = (country ? country + " · " : "") + (mo ? monthLabel(mo) : w === "all" ? `${D.period_label}, all weeks` : `Week of ${weekLabel(w)}`) + ` · ${D.program}`;
   const PP = prevPeriod(), P = PP ? totals(PP.rows) : null;
   const dv = (f, d, fmt) => P ? delta(f(T), f(P), d, fmt) : "";
   const vparts = P ? [...new Set([...Object.keys(T.val), ...Object.keys(P.val)])].filter(priced).sort()

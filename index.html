@@ -220,6 +220,7 @@ function ingest(data) {
   D.shifts.forEach(s => {
     s.m = Object.fromEntries(M.map(k => [k, 0])); s.other = 0; s.extraModels = {};
     s.products.forEach(p => { if (p.model && s.m[p.model] !== undefined) s.m[p.model] += p.q; else if (p.model) { s.extraModels[p.model] = (s.extraModels[p.model]||0) + p.q; s.other += p.q; } else s.other += p.q; });
+    s.other += s.unlisted || 0;          // sold but recorded without a product name: still a sale (no value, as the product is unknown)
     s.machines = M.reduce((a, k) => a + s.m[k], 0) + Object.values(s.extraModels).reduce((a, b) => a + b, 0);
     s.hay = (Object.values(s.answers).join(" ") + " " + s.store + " " + s.staff).toLowerCase();
   });
@@ -252,7 +253,7 @@ function filtered(w = $("week").value, mo = $("month").value) {
 function totals(rows) {
   const t = {n: rows.length, hours: 0, demos: 0, units: 0, value: 0, val: {}, photos: 0, other: 0, machines: 0, m: Object.fromEntries(M.map(k => [k, 0])), stores: new Set(rows.map(r => r.store)).size, vis: [], est: false, pending: 0};
   rows.forEach(r => { t.val[r.currency] = (t.val[r.currency] || 0) + r.value; t.photos += r.photos.count; t.hours += r.hours; t.demos += r.demos; t.units += r.units; t.value += r.value; t.other += r.other; t.machines += r.machines; M.forEach(k => t.m[k] += r.m[k]);
-    if (r.visitors_n != null) t.vis.push(r.visitors_n); if (r.estimated) t.est = true; if (r.price_missing) t.missing = (t.missing || 0) + r.products.filter(p => p.match === "missing").length; if (r.status === "Draft") t.draft = (t.draft || 0) + 1; else if (r.status !== "Approved") t.pending++; });
+    if (r.visitors_n != null) t.vis.push(r.visitors_n); if (r.estimated) t.est = true; if (r.price_missing) t.missing = (t.missing || 0) + r.products.filter(p => p.match === "missing").length; t.unlisted = (t.unlisted || 0) + (r.unlisted || 0); if (r.status === "Draft") t.draft = (t.draft || 0) + 1; else if (r.status !== "Approved") t.pending++; });
   t.avgVis = t.vis.length ? t.vis.reduce((a, b) => a + b, 0) / t.vis.length : null;
   return t;
 }
@@ -292,6 +293,7 @@ function render() {
   if (T.draft) n.push(`${T.draft} shift${T.draft > 1 ? "s are" : " is"} still a draft (not yet submitted by the demonstrator). Figures may be incomplete.`);
   if (T.pending) n.push(`${T.pending} shift${T.pending > 1 ? "s are" : " is"} submitted but not yet approved. Figures may change after review.`);
   if (Object.keys(T.val).some(c => !priced(c))) n.push(`NZ value at RRP isn't shown yet: there's no NZ price list. Units sold are still counted.`);
+  if (T.unlisted) n.push(`Other products sold includes ${T.unlisted} unit${T.unlisted > 1 ? "s" : ""} recorded without a product name, so not included in the value at RRP.`);
   if (T.missing) n.push(`Value leaves out ${T.missing} item(s) without a matched price. Open the shift to see which.`);
   $("notices").innerHTML = n.map(x => `<div class="notice">${esc(x)}</div>`).join("");
   view === "shift" ? shiftTable(rows, T) : groupTable(rows, T);
@@ -336,7 +338,7 @@ function shiftTable(rows, T) {
     const prod = r.products.length ? `<table class="mini"><tbody>${r.products.map(p => `<tr><td class="l">${esc(p.name)}<br><span class="pill">${esc(p.sku)}</span> <span class="pill">${esc(p.cat)}</span>${p.match === "missing" ? ` <span class="est">no price found</span>` : ""}</td><td>${p.q}${priced(r.currency) ? " × " + money(p.rrp, r.currency) : ""}</td></tr>`).join("")}</tbody></table>`
       : `<p class="zero">No products recorded on this shift.</p>`;
     const qa = `<dl>${Q.map(q => `<dt title="${esc(q.full)}">${esc(q.label)}</dt><dd>${r.answers[q.key] == null ? "Not asked" : esc(r.answers[q.key] || "–")}</dd>`).join("")}</dl>`;
-    return main + `<tr class="detail"><td class="first"></td><td colspan="${cols.length - 1}" class="l"><div class="detailgrid"><div><h3>Products sold · ${esc(r.start)}–${esc(r.end)}</h3>${prod}<p>${r.photos.count ? `<a class="ph" href="${esc(r.photos.link)}" target="_blank" rel="noopener">Open ${r.photos.count} attachment${r.photos.count > 1 ? "s" : ""} in Mesh Circle</a>` : `<span class="zero">No photos attached.</span>`}</p>${r.unlisted ? `<p class="est">${r.unlisted} unit(s) sold but not on the product list.</p>` : ""}</div><div><h3>Questionnaire &amp; comments</h3>${qa}</div></div></td></tr>`;
+    return main + `<tr class="detail"><td class="first"></td><td colspan="${cols.length - 1}" class="l"><div class="detailgrid"><div><h3>Products sold · ${esc(r.start)}–${esc(r.end)}</h3>${prod}<p>${r.photos.count ? `<a class="ph" href="${esc(r.photos.link)}" target="_blank" rel="noopener">Open ${r.photos.count} attachment${r.photos.count > 1 ? "s" : ""} in Mesh Circle</a>` : `<span class="zero">No photos attached.</span>`}</p>${r.unlisted ? `<p class="est">${r.unlisted} unit(s) sold without a product name (counted in Other, not in value).</p>` : ""}</div><div><h3>Questionnaire &amp; comments</h3>${qa}</div></div></td></tr>`;
   }).join("");
   const foot = `<tfoot><tr><td class="first"></td><td class="l" colspan="4">Total · ${T.n} shifts · ${T.stores} stores</td><td>${nf(T.hours, 2)}</td><td>${nf(T.demos)}</td>${M.map(m => `<td>${T.m[m]}</td>`).join("")}<td>${T.other}</td><td>${moneyBy(T)}</td><td class="l"></td><td class="ph">${T.photos}</td>
     <td class="l qc">${trafficMix(rows)}</td><td class="l qc">${T.avgVis != null ? "Avg " + nf(T.avgVis, 1) : ""}</td>${'<td class="qc"></td>'.repeat(Math.max(0, Q.length - 2))}</tr></tfoot>`;
@@ -391,7 +393,7 @@ function cards(rows, T) {
       const val = priced(r.currency) ? (r.value ? `<span class="val">${money(r.value, r.currency)}</span>` : "") : "";
       const prod = r.products.length ? `<table class="mini"><tbody>${r.products.map(p => `<tr><td class="l">${esc(p.name)}${p.match === "missing" ? ` <span class="est">no price found</span>` : ""}</td><td>${p.q}${priced(r.currency) ? " × " + money(p.rrp, r.currency) : ""}</td></tr>`).join("")}</tbody></table>` : `<p class="zero">No products recorded on this shift.</p>`;
       const qa = `<dl>${D.questions.map(q => `<dt>${esc(q.label)}</dt><dd>${r.answers[q.key] == null ? "Not asked" : esc(r.answers[q.key] || "–")}</dd>`).join("")}</dl>`;
-      const detail = isOpen ? `<div class="detailgrid"><div><h3>Products sold · ${esc(r.start)}–${esc(r.end)}</h3>${prod}<p>${r.photos.count ? `<a class="ph" href="${esc(r.photos.link)}" target="_blank" rel="noopener">Open ${r.photos.count} photo${r.photos.count > 1 ? "s" : ""} in Mesh Circle</a>` : `<span class="zero">No photos attached.</span>`}</p></div><div><h3>Questionnaire &amp; comments</h3>${qa}</div></div>` : "";
+      const detail = isOpen ? `<div class="detailgrid"><div><h3>Products sold · ${esc(r.start)}–${esc(r.end)}</h3>${prod}<p>${r.photos.count ? `<a class="ph" href="${esc(r.photos.link)}" target="_blank" rel="noopener">Open ${r.photos.count} photo${r.photos.count > 1 ? "s" : ""} in Mesh Circle</a>` : `<span class="zero">No photos attached.</span>`}</p>${r.unlisted ? `<p class="est">${r.unlisted} unit(s) sold without a product name.</p>` : ""}</div><div><h3>Questionnaire &amp; comments</h3>${qa}</div></div>` : "";
       return `<div class="card"><button class="cx" aria-expanded="${isOpen}" data-id="${esc(r.id)}">
         <div class="top"><span>${fmtD(r.date)} · ${esc(r.state)} · ${nf(r.hours, 1)} h</span>${r.status !== "Approved" ? `<span class="pill pend">${esc(r.status)}</span>` : ""}</div>
         <h3>${esc(r.store)}</h3><div class="who">${esc(r.staff)}</div>

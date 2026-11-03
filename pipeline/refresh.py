@@ -291,7 +291,7 @@ def main():
     shifts_raw = sf.query("shifts", "SELECT Id, Name, RB_Customer__r.Name, RB_Actual_Start_Date__c, RB_Actual_Start_Time__c, RB_Actual_End_Time__c, "
         "RB_Customer_Store__r.Name, State__c, Employee_Name__r.FirstName, Employee_Name__r.LastName, Shift_Duration_Hours__c, "
         f"Demos_and_Tastings__c, Product_Sales__c, Total_Sales__c, Status__c, CreatedDate, RB_Comments__c FROM Timesheet__c WHERE {F()}")
-    prods_raw = sf.query("products", f"SELECT Timesheet__r.Name, RB_Customer_Product__r.Name, Quantity__c FROM Product_Sale__c WHERE {F('Timesheet__r.')}")
+    prods_raw = sf.query("products", f"SELECT Timesheet__r.Name, RB_Customer_Product__r.Name, Quantity__c, noofsales__c FROM Product_Sale__c WHERE {F('Timesheet__r.')}")
     qa_raw = sf.query("questionnaire", f"SELECT RB_Timesheet__r.Name, RB_Question__c, RB_Answer__c FROM RB_Questionnaire__c WHERE {F('RB_Timesheet__r.')} AND RB_Is_Deleted__c = false")
     files_raw = sf.query("files", f"SELECT LinkedEntityId, ContentDocument.FileExtension FROM ContentDocumentLink WHERE LinkedEntityId IN (SELECT Id FROM Timesheet__c WHERE {F()})")
 
@@ -359,7 +359,10 @@ def main():
         warn(f"Prices are stale: catalogue last checked {pc} ({(today - dt.date.fromisoformat(pc)).days} days ago). Refresh pipeline/catalogue_au.tsv from kitchenaid.com.au and update prices_checked in config.json.")
 
     prods = defaultdict(list)
-    for r in prods_raw: prods[r["Timesheet__r"]["Name"]].append((r["RB_Customer_Product__r"]["Name"], int(r.get("Quantity__c") or 1)))
+    # units sold = "No of Sales" on each product line (what the demonstrator counts; it adds up to the timesheet's Total Sales).
+    # "Quantity" is usually 1 and is only a fallback for lines without No of Sales.
+    sold = lambda r: int(r["noofsales__c"]) if r.get("noofsales__c") is not None else int(r.get("Quantity__c") or 1)
+    for r in prods_raw: prods[r["Timesheet__r"]["Name"]].append((r["RB_Customer_Product__r"]["Name"], sold(r)))
     qn = {q["n"]: q["key"] for q in CFG["questions"] if "n" in q}
     answers = defaultdict(dict)
     for r in qa_raw:
@@ -407,7 +410,8 @@ def main():
             plist.append({"name": clean_product_name(name), "sku": p["sku"], "q": q, "rrp": p["rrp"], "value": round(p["rrp"] * q, 2),
                           "model": model_of(p["title"] + " " + name), "cat": category(p["title"] + " " + name), "match": p["match"], "note": p["note"]})
         units = sum(p["q"] for p in plist)
-        if units != int(s["Product_Sales__c"] or 0): warn(f"Shift {sid}: {units} product lines but Product_Sales = {s['Product_Sales__c']}.")
+        if len(plist) != int(s["Product_Sales__c"] or 0): warn(f"Shift {sid}: {len(plist)} product lines but Product_Sales = {s['Product_Sales__c']}.")
+        if units != int(s["Total_Sales__c"] or 0): warn(f"Shift {sid}: No of Sales adds up to {units} but Total Sales = {s['Total_Sales__c']}.")
         ans = {q["key"]: None for q in CFG["questions"]}
         for k, v in answers.get(sid, {}).items(): ans[k] = redact(v, sid)
         if not answers.get(sid): warn(f"Shift {sid}: no questionnaire answers.")
@@ -423,7 +427,7 @@ def main():
         rows.append({"id": sid, "date": d.isoformat(), "week": monday(d).isoformat(), "state": s["State__c"], "store": title_store(s["RB_Customer_Store__r"]["Name"]),
             "retailer": retailer(s["RB_Customer_Store__r"]["Name"]), "staff": staff_name(s["Employee_Name__r"]["FirstName"], s["Employee_Name__r"]["LastName"]),
             "start": t(s["RB_Actual_Start_Time__c"]), "end": t(s["RB_Actual_End_Time__c"]), "hours": float(s["Shift_Duration_Hours__c"] or 0), "demos": int(s["Demos_and_Tastings__c"] or 0),
-            "units": units, "unlisted": max(0, int(s["Total_Sales__c"] or 0) - int(s["Product_Sales__c"] or 0)),
+            "units": units, "unlisted": max(0, int(s["Total_Sales__c"] or 0) - units),      # sales in the timesheet total with no product line
             "status": {"Draft": "Draft", "Shift Submitted": "Pending approval"}.get(s["Status__c"], "Approved"),
             "products": plist, "value": round(sum(p["value"] for p in plist), 2), "estimated": est, "price_missing": missing,
             "answers": ans, "visitors_n": first_num(ans.get("visitors")), "traffic_level": traffic(ans.get("traffic")),

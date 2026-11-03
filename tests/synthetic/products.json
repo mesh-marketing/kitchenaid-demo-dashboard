@@ -8,7 +8,8 @@
     "RB_Customer_Product__r": {
      "Name": "KF4 Fully Automatic Espresso Machine Matte Black"
     },
-    "Quantity__c": 1
+    "Quantity__c": 1,
+    "noofsales__c": 2
    },
    {
     "Timesheet__r": {

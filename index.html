@@ -198,7 +198,9 @@ const nf = (n, d = 0) => Number(n).toLocaleString("en-AU", {minimumFractionDigit
 const CUR = {AUD: "A$", NZD: "NZ$"};
 const money = (n, c = "AUD") => (CUR[c] || "$") + nf(n, 0);
 const priced = c => !D.priced_currencies || D.priced_currencies.includes(c);
-const moneyBy = t => { const parts = Object.entries(t.val).filter(([c]) => priced(c)).sort().map(([c, v]) => money(v, c)); return parts.length ? parts.join(" · ") : `<span class="zero">Not priced</span>`; };
+// one amount per currency, leaving out currencies with no value (e.g. NZ$0); if everything is zero, show a single 0
+const moneyBy = t => { const all = Object.entries(t.val).filter(([c]) => priced(c)).sort(), parts = all.filter(([, v]) => Math.round(v)).map(([c, v]) => money(v, c));
+  return parts.length ? parts.join(" · ") : all.length ? money(0, all[0][0]) : `<span class="zero">Not priced</span>`; };
 const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const pd = s => { const [y,m,d] = s.split("-").map(Number); return new Date(Date.UTC(y, m-1, d)); };

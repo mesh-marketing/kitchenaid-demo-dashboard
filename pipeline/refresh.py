@@ -264,9 +264,15 @@ def auto_match(name, rows):
         if models and not models & C: continue
         inter = len(S & C)
         if inter: scored.append((inter / len(S | C), inter / len(S), c))
-    if not scored: return None
+    def same_model():
+        """Fallback: the name has a model code and every website version of that model has one price (e.g. a colour
+        not listed online) → use it, marked as an estimate."""
+        if not models: return None
+        cands = [c for c in rows if models & _toks(c["title"] + " " + c["variant"]) and "BUNDLE" not in c["title"].upper() and "+" not in c["title"]]
+        return (cands[0], True) if cands and len({rrp_of(c) for c in cands}) == 1 else None
+    if not scored: return same_model()
     j, cov, _ = max(scored, key=lambda x: x[0])
-    if cov < 0.75 or j < 0.5: return None
+    if cov < 0.75 or j < 0.5: return same_model()
     ties = [x[2] for x in scored if x[0] >= j - 1e-9]
     best = min(ties, key=rrp_of)
     return best, (len({rrp_of(c) for c in ties}) > 1 or j < 0.7)

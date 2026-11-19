@@ -55,6 +55,8 @@ for m in _csv.DictReader(open(ROOT / "pipeline" / "price_map_au.csv", encoding="
     else: _wrong += 1; print("WRONG auto price:", m["sf_product"], "->", got[0]["title"], got[0]["variant"])
 assert _wrong == 0 and _right >= 40, (_right, _wrong)
 assert _r.auto_match("COFFEE BEANS", _cat) is None and _r.auto_match("MILK JUG", _cat) is None
+_m = _r.auto_match("KSM180 DESIGN SERIES BLOSSOM", _cat)
+assert _m and _m[1] and _r.rrp_of(_m[0]) == 1099.0, _m                          # colour not online: same-model price, as estimate
 print("OK: automatic price matching", _right, "right, 0 wrong")
 
 # price history: an RRP change applies from the day it is seen; earlier sales keep the old price

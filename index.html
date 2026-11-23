@@ -215,7 +215,7 @@ footer p{margin:4px 0}
     <div class="row"><h2 id="drillTitle"></h2><button class="x2" id="drillClose" aria-label="Close">Close</button></div>
     <p id="drillSub"></p>
     <div class="row"><div class="seg" id="drillBy" role="group" aria-label="Group by">
-      <button data-by="day" aria-pressed="true">By day</button><button data-by="store" aria-pressed="false">By store</button>
+      <button data-by="day" aria-pressed="true">By day</button><button data-by="store" aria-pressed="false">By store</button><button data-by="product" aria-pressed="false">By product</button>
     </div></div>
   </div>
   <div class="db" id="drillBody"></div>
@@ -480,6 +480,16 @@ function drawDrill() {
   $("drillSub").textContent = `${$("sub").textContent} · ${nf(units)} unit${units === 1 ? "" : "s"}${Object.keys(val).length ? " · " + valTxt(val).replace(/<[^>]+>/g, "") + " at RRP" : ""}`;
   document.querySelectorAll("#drillBy button").forEach(b => b.setAttribute("aria-pressed", b.dataset.by === drillBy));
   if (!lines.length) { $("drillBody").innerHTML = `<p class="empty">Nothing sold for these filters.</p>`; return; }
+  if (drillBy === "product") {          // one line per product: units, stores, value; most sold first
+    const g = new Map();
+    lines.forEach(x => { const k = x.name + "|" + !!x.unknown; const m = g.get(k) || {x, q: 0, val: {}, stores: new Set(), est: false, missing: false};
+      m.q += x.q; m.stores.add(x.r.store); if (x.val != null) m.val[x.r.currency] = (m.val[x.r.currency] || 0) + x.val; m.est = m.est || x.est; m.missing = m.missing || x.missing; g.set(k, m); });
+    const rowsP = [...g.values()].sort((a, b) => b.q - a.q || a.x.name.localeCompare(b.x.name));
+    $("drillBody").innerHTML = `<table><thead><tr><th class="l">Product</th><th>Stores</th><th>Units</th><th>Value at RRP</th></tr></thead><tbody>${rowsP.map(m =>
+      `<tr><td class="l">${esc(m.x.name)}${m.est ? ` <span class="est">estimate</span>` : ""}${m.missing ? ` <span class="est">no price found</span>` : ""}${m.x.unknown ? ` <span class="nm">(no value)</span>` : ""}</td><td>${m.stores.size}</td><td>${nf(m.q)}</td><td>${valTxt(m.val)}</td></tr>`).join("")}</tbody>
+      <tfoot><tr><td class="l" colspan="2">Total · ${g.size} product${g.size === 1 ? "" : "s"}</td><td>${nf(units)}</td><td>${valTxt(val)}</td></tr></tfoot></table>`;
+    return;
+  }
   const cell = x => `<td class="l">${esc(x.name)}${x.est ? ` <span class="est">estimate</span>` : ""}${x.missing ? ` <span class="est">no price found</span>` : ""}${x.unknown ? ` <span class="nm">(no value)</span>` : ""}</td><td>${nf(x.q)}</td><td>${x.val != null ? money(x.val, x.r.currency) : "–"}</td>`;
   const groups = new Map();
   const key = drillBy === "day" ? x => x.r.date + "|" + x.r.store + "|" + x.r.staff : x => x.r.store;

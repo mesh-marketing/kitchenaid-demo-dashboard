@@ -48,17 +48,16 @@ button.primary{background:var(--green);color:var(--green-ink);border-color:var(-
 .kpi.hero{background:var(--green);color:var(--green-ink)}.kpi.hero span{color:var(--green-ink);opacity:.85}
 .kpi.warm{background:var(--peach)}
 /* brand lockup: KitchenAid × Mesh, top left */
-.brand{display:flex;align-items:center;gap:14px;margin:0 0 6px;width:fit-content}
+.brand{display:flex;align-items:center;gap:14px;margin:0 0 12px;width:fit-content}
 .brand img{display:block;width:auto}
 .brand .ka{height:21px}
-.brand .mesh{height:74px;margin:-12px 0 -10px}
+.brand .mesh{height:22px}
+.brand .dk{display:none}
 .brand .x{font-size:22px;font-weight:300;line-height:1;color:var(--mute);transform:translateY(-1px)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 #lock .brand{margin:0 0 16px}
-:root[data-theme="dark"] .brand{background:#FBFAF7;padding:2px 18px;border-radius:16px}:root[data-theme="dark"] .brand .mesh{margin:0}
-:root[data-theme="dark"] .brand .x{color:#5D665F}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .brand{background:#FBFAF7;padding:2px 18px;border-radius:16px}:root:not([data-theme="light"]) .brand .mesh{margin:0}
-  :root:not([data-theme="light"]) .brand .x{color:#5D665F}}
+:root[data-theme="dark"] .brand .lt{display:none}:root[data-theme="dark"] .brand .dk{display:block}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .brand .lt{display:none}:root:not([data-theme="light"]) .brand .dk{display:block}}
 .kpi.drill{cursor:pointer;transition:box-shadow .15s;-webkit-tap-highlight-color:rgba(0,0,0,.08);touch-action:manipulation}
 .kpi.drill:hover,.kpi.drill:focus-visible{box-shadow:0 0 0 2px var(--orange);outline:none}
 .kpi.drill span::after{content:" ›";font-weight:700}
@@ -162,7 +161,7 @@ footer p{margin:4px 0}
   #kmore{display:block;width:100%;margin:-4px 0 12px;font-size:13px}
   .tbl{display:none}
   #cards{display:block}
-  .brand{gap:10px}.brand .ka{height:17px}.brand .mesh{height:58px;margin:-9px 0 -8px}.brand .x{font-size:18px}
+  .brand{gap:10px}.brand .ka{height:17px}.brand .mesh{height:18px}.brand .x{font-size:18px}
   dialog#drill{width:100vw;max-width:100vw;height:100%;max-height:100%;margin:0;border-radius:0}
   #drill .dh,#drill .db{padding-left:14px;padding-right:14px}
   #drill table{font-size:13px}
@@ -182,16 +181,17 @@ footer p{margin:4px 0}
   tr{break-inside:avoid}
   tbody tr.detail{display:none}
   footer{display:none}
+  .brand .lt{display:block!important}.brand .dk{display:none!important}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
-<div id="lock"><form id="lockform"><div class="brand" aria-label="KitchenAid × Mesh Marketing"><img class="ka" src="assets/kitchenaid.png" alt="KitchenAid"><span class="x" aria-hidden="true">×</span><img class="mesh" src="assets/mesh.png" alt="Mesh Marketing"></div><h2>Coffee demo dashboard</h2><p>Enter the password to view the latest data.</p>
+<div id="lock"><form id="lockform"><div class="brand" aria-label="KitchenAid × Mesh Marketing"><img class="ka lt" src="assets/kitchenaid.png" alt="KitchenAid"><img class="ka dk" src="assets/kitchenaid-white.png" alt="KitchenAid"><span class="x" aria-hidden="true">×</span><img class="mesh lt" src="assets/mesh.png" alt="Mesh Marketing"><img class="mesh dk" src="assets/mesh-white.png" alt="Mesh Marketing"></div><h2>Coffee demo dashboard</h2><p>Enter the password to view the latest data.</p>
 <input id="pw" type="password" autocomplete="current-password" aria-label="Password" autofocus><button class="primary" type="submit">Open dashboard</button><div id="lockmsg" role="alert"></div></form></div>
 <div class="wrap">
 <header>
-  <div><div class="brand" aria-label="KitchenAid × Mesh Marketing"><img class="ka" src="assets/kitchenaid.png" alt="KitchenAid"><span class="x" aria-hidden="true">×</span><img class="mesh" src="assets/mesh.png" alt="Mesh Marketing"></div><div class="sr" id="client"></div><h1>Coffee demo dashboard</h1><div class="sub" id="sub"></div></div>
+  <div><div class="brand" aria-label="KitchenAid × Mesh Marketing"><img class="ka lt" src="assets/kitchenaid.png" alt="KitchenAid"><img class="ka dk" src="assets/kitchenaid-white.png" alt="KitchenAid"><span class="x" aria-hidden="true">×</span><img class="mesh lt" src="assets/mesh.png" alt="Mesh Marketing"><img class="mesh dk" src="assets/mesh-white.png" alt="Mesh Marketing"></div><div class="sr" id="client"></div><h1>Coffee demo dashboard</h1><div class="sub" id="sub"></div></div>
   <div class="asat" id="asat"></div>
 </header>
 <div id="stale" role="status"></div>

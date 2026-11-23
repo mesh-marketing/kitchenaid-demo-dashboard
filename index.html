@@ -60,7 +60,7 @@ dialog#drill::backdrop{background:rgba(20,25,22,.45)}
 #drill .db{padding:4px 18px 18px;overflow:auto}
 #drill table{width:100%;border-collapse:collapse;font-size:13.5px}
 #drill td,#drill th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top;white-space:nowrap}
-#drill td.l{white-space:normal;min-width:0;width:100%}#drill td.dt{white-space:nowrap}
+#drill td.l{white-space:normal;min-width:0;width:100%}#drill td.dt{white-space:nowrap;text-align:left}
 #drill table{table-layout:auto}
 #drill td.l,#drill th.l{text-align:left}
 #drill tr.g td{background:var(--band);font-weight:700;text-align:left;border-bottom:0;padding-top:9px}
@@ -453,6 +453,8 @@ PHONE.addEventListener("change", () => D && render());
 
 // ---------- tap a "sold" tile: list of what was sold, by day or by store, for the filters on screen ----------
 let drillKind = "machines", drillBy = "day";
+const modelLabel = m => m === "Semi" ? "Semi Auto" : m;          // coffee machines: model only (KF2, KF4 … Semi Auto)
+const firstName = r => esc((r.staff || "").split(" ")[0]);
 function soldLines(rows, kind) {
   const out = [];
   rows.forEach(r => {
@@ -460,7 +462,7 @@ function soldLines(rows, kind) {
       const isM = !!p.model;
       if (kind === "machines" && !isM || kind === "other" && isM) return;
       const ok = priced(r.currency) && p.match !== "missing";
-      out.push({r, name: p.name, q: p.q, val: ok ? p.q * p.rrp : null, est: p.match === "estimated", missing: p.match === "missing"});
+      out.push({r, name: isM ? modelLabel(p.model) : p.name, q: p.q, val: ok ? p.q * p.rrp : null, est: p.match === "estimated", missing: p.match === "missing"});
     });
     if (kind !== "machines" && r.unlisted) out.push({r, name: "Product not recorded", q: r.unlisted, val: null, unknown: true});
   });
@@ -480,7 +482,7 @@ function drawDrill() {
   if (!lines.length) { $("drillBody").innerHTML = `<p class="empty">Nothing sold for these filters.</p>`; return; }
   const cell = x => `<td class="l">${esc(x.name)}${x.est ? ` <span class="est">estimate</span>` : ""}${x.missing ? ` <span class="est">no price found</span>` : ""}${x.unknown ? ` <span class="nm">(no value)</span>` : ""}</td><td>${nf(x.q)}</td><td>${x.val != null ? money(x.val, x.r.currency) : "–"}</td>`;
   const groups = new Map();
-  const key = drillBy === "day" ? x => x.r.date + "|" + x.r.store : x => x.r.store;
+  const key = drillBy === "day" ? x => x.r.date + "|" + x.r.store + "|" + x.r.staff : x => x.r.store;
   const merged = new Map();     // same product, same shift: one line with the units added up
   lines.forEach(x => { const k = x.r.id + "|" + x.name + "|" + !!x.unknown; const m = merged.get(k);
     if (m) { m.q += x.q; if (x.val != null) m.val = (m.val || 0) + x.val; } else merged.set(k, {...x}); });
@@ -492,9 +494,9 @@ function drawDrill() {
   const body = order.map(([, xs]) => {
     const r0 = xs[0].r, u = xs.reduce((s, x) => s + x.q, 0), gv = {};
     xs.forEach(x => { if (x.val != null) gv[x.r.currency] = (gv[x.r.currency] || 0) + x.val; });
-    const label = drillBy === "day" ? `${fmtD(r0.date)} · ${esc(r0.store)} <span class="gs">${esc(r0.state)}</span>` : `${esc(r0.store)} <span class="gs">${esc(r0.state)} · ${nf(u)} unit${u === 1 ? "" : "s"} · ${valTxt(gv)}</span>`;
+    const label = drillBy === "day" ? `${fmtD(r0.date)} · ${esc(r0.store)} <span class="gs">${esc(r0.state)} · ${firstName(r0)}</span>` : `${esc(r0.store)} <span class="gs">${esc(r0.state)} · ${nf(u)} unit${u === 1 ? "" : "s"} · ${valTxt(gv)}</span>`;
     return `<tr class="g"><td colspan="${drillBy === "day" ? 3 : 4}">${label}</td></tr>` +
-      xs.map(x => `<tr>${drillBy === "store" ? `<td class="dt">${fmtD(x.r.date)}</td>` : ""}${cell(x)}</tr>`).join("");
+      xs.map(x => `<tr>${drillBy === "store" ? `<td class="dt">${fmtD(x.r.date)} <span class="nm">${firstName(x.r)}</span></td>` : ""}${cell(x)}</tr>`).join("");
   }).join("");
   $("drillBody").innerHTML = `<table><thead>${head}</thead><tbody>${body}</tbody><tfoot><tr><td class="l" colspan="${drillBy === "day" ? 1 : 2}">Total</td><td>${nf(units)}</td><td>${valTxt(val)}</td></tr></tfoot></table>`;
 }

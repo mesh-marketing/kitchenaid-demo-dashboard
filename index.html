@@ -47,6 +47,26 @@ button.primary{background:var(--green);color:var(--green-ink);border-color:var(-
 .kpi span{color:var(--mute);font-size:12.5px}
 .kpi.hero{background:var(--green);color:var(--green-ink)}.kpi.hero span{color:var(--green-ink);opacity:.85}
 .kpi.warm{background:var(--peach)}
+.kpi.drill{cursor:pointer;transition:box-shadow .15s}
+.kpi.drill:hover,.kpi.drill:focus-visible{box-shadow:0 0 0 2px var(--orange);outline:none}
+.kpi.drill span::after{content:" ›";font-weight:700}
+dialog#drill{border:0;border-radius:16px;padding:0;width:min(760px,94vw);max-height:86vh;background:var(--paper);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+dialog#drill::backdrop{background:rgba(20,25,22,.45)}
+#drill .dh{position:sticky;top:0;background:var(--paper);padding:16px 18px 10px;border-bottom:1px solid var(--line);z-index:1}
+#drill .dh h2{margin:0;font-size:20px}
+#drill .dh p{margin:3px 0 10px;color:var(--mute);font-size:13px}
+#drill .dh .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#drill .dh .x2{margin-left:auto}
+#drill .db{padding:4px 18px 18px;overflow:auto}
+#drill table{width:100%;border-collapse:collapse;font-size:13.5px}
+#drill td,#drill th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top;white-space:nowrap}
+#drill td.l{white-space:normal;min-width:0;width:100%}#drill td.dt{white-space:nowrap}
+#drill table{table-layout:auto}
+#drill td.l,#drill th.l{text-align:left}
+#drill tr.g td{background:var(--band);font-weight:700;text-align:left;border-bottom:0;padding-top:9px}
+#drill tr.g td .gs{font-weight:400;color:var(--mute)}
+#drill tfoot td{font-weight:700;border-bottom:0;border-top:2px solid var(--line)}
+#drill .nm{font-size:12px;color:var(--mute)}
 .notice{border-radius:10px;padding:9px 12px;margin:0 0 12px;background:var(--amber-bg);font-size:13px}
 .tbl{overflow:auto;border:1px solid var(--line);border-radius:12px;max-height:72vh}
 table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px}
@@ -130,6 +150,9 @@ footer p{margin:4px 0}
   #kmore{display:block;width:100%;margin:-4px 0 12px;font-size:13px}
   .tbl{display:none}
   #cards{display:block}
+  dialog#drill{width:100vw;max-width:100vw;height:100%;max-height:100%;margin:0;border-radius:0}
+  #drill .dh,#drill .db{padding-left:14px;padding-right:14px}
+  #drill table{font-size:13px}
 }
 @page{size:A4 landscape;margin:10mm}
 @media print{
@@ -187,6 +210,16 @@ footer p{margin:4px 0}
 <div id="notices"></div>
 <div class="tbl"><table id="t"></table></div>
 <div id="cards"></div>
+<dialog id="drill" aria-labelledby="drillTitle">
+  <div class="dh">
+    <div class="row"><h2 id="drillTitle"></h2><button class="x2" id="drillClose" aria-label="Close">Close</button></div>
+    <p id="drillSub"></p>
+    <div class="row"><div class="seg" id="drillBy" role="group" aria-label="Group by">
+      <button data-by="day" aria-pressed="true">By day</button><button data-by="store" aria-pressed="false">By store</button>
+    </div></div>
+  </div>
+  <div class="db" id="drillBody"></div>
+</dialog>
 <footer id="foot"></footer>
 </div>
 
@@ -219,7 +252,7 @@ function ingest(data) {
   D = data; M = D.models;
   D.shifts.forEach(s => {
     s.m = Object.fromEntries(M.map(k => [k, 0])); s.other = 0; s.extraModels = {};
-    s.products.forEach(p => { if (p.model && s.m[p.model] !== undefined) s.m[p.model] += p.q; else if (p.model) { s.extraModels[p.model] = (s.extraModels[p.model]||0) + p.q; s.other += p.q; } else s.other += p.q; });
+    s.products.forEach(p => { if (p.model && s.m[p.model] !== undefined) s.m[p.model] += p.q; else if (p.model) s.extraModels[p.model] = (s.extraModels[p.model]||0) + p.q; else s.other += p.q; });
     s.other += s.unlisted || 0;          // sold but recorded without a product name: still a sale (no value, as the product is unknown)
     s.machines = M.reduce((a, k) => a + s.m[k], 0) + Object.values(s.extraModels).reduce((a, b) => a + b, 0);
     s.hay = (Object.values(s.answers).join(" ") + " " + s.store + " " + s.staff).toLowerCase();
@@ -284,11 +317,12 @@ function render() {
   $("kpis").innerHTML = [
     ["hero", T.n, "Shifts", dv(t => t.n)], ["k-more", nf(T.hours, 1), "Hours", dv(t => t.hours, 1)], ["", nf(T.demos), "Demos / tastings", dv(t => t.demos)],
     ["k-more", T.n ? nf(T.demos / T.n, 1) : "–", "Demos per shift", P && T.n && P.n ? dv(t => t.demos / t.n, 1) : ""],
-    ["m-only warm", nf(T.machines + T.other), "Units sold", dv(t => t.machines + t.other)],
-    ["warm d-only", nf(T.machines), "Coffee machines sold", dv(t => t.machines)],
-    ["d-only", nf(T.other), "Other products sold", dv(t => t.other)], ["warm", moneyBy(T), "Value at RRP", valDelta], ["k-more", T.stores, "Stores", dv(t => t.stores)],
-    ["k-more m-only", nf(T.machines), "Coffee machines sold", dv(t => t.machines)], ["k-more m-only", nf(T.other), "Other products sold", dv(t => t.other)]
-  ].map(([c, v, l, d]) => `<div class="kpi ${c}"><b>${v}</b><span>${l}</span>${d ? `<em>${d} ${PP.label}</em>` : ""}</div>`).join("");
+    ["m-only warm", nf(T.machines + T.other), "Units sold", dv(t => t.machines + t.other), "all"],
+    ["warm d-only", nf(T.machines), "Coffee machines sold", dv(t => t.machines), "machines"],
+    ["d-only", nf(T.other), "Other products sold", dv(t => t.other), "other"], ["warm", moneyBy(T), "Value at RRP", valDelta], ["k-more", T.stores, "Stores", dv(t => t.stores)],
+    ["k-more m-only", nf(T.machines), "Coffee machines sold", dv(t => t.machines), "machines"], ["k-more m-only", nf(T.other), "Other products sold", dv(t => t.other), "other"]
+  ].map(([c, v, l, d, dk]) => `<div class="kpi ${c}${dk ? " drill" : ""}"${dk ? ` role="button" tabindex="0" data-drill="${dk}" title="See what was sold, by day and store"` : ""}><b>${v}</b><span>${l}</span>${d ? `<em>${d} ${PP.label}</em>` : ""}</div>`).join("");
+  $("kpis").querySelectorAll(".kpi.drill").forEach(k => { k.onclick = () => openDrill(k.dataset.drill); k.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDrill(k.dataset.drill); } }; });
   const n = [];
   if (T.draft) n.push(`${T.draft} shift${T.draft > 1 ? "s are" : " is"} still a draft (not yet submitted by the demonstrator). Figures may be incomplete.`);
   if (T.pending) n.push(`${T.pending} shift${T.pending > 1 ? "s are" : " is"} submitted but not yet approved. Figures may change after review.`);
@@ -380,7 +414,7 @@ function foot() { $("foot").innerHTML = ""; }   // client-facing: no explanatory
 const PHONE = matchMedia("(max-width:640px)");
 const unitsLine = r => {
   const bits = [...M.filter(m => r.m[m]).map(m => `<b>${r.m[m]}</b> ${esc(m)}`), ...Object.entries(r.extraModels || {}).map(([m, q]) => `<b>${q}</b> ${esc(m)}`)];
-  const other = r.other - Object.values(r.extraModels || {}).reduce((a, b) => a + b, 0);
+  const other = r.other;
   if (other) bits.push(`<b>${other}</b> other`);
   return bits.join(" · ");
 };
@@ -417,6 +451,56 @@ function cards(rows, T) {
   $("cards").querySelectorAll("button.cx").forEach(b => b.onclick = () => { const id = b.dataset.id; open.has(id) ? open.delete(id) : open.add(id); render(); });
 }
 PHONE.addEventListener("change", () => D && render());
+
+// ---------- tap a "sold" tile: list of what was sold, by day or by store, for the filters on screen ----------
+let drillKind = "machines", drillBy = "day";
+function soldLines(rows, kind) {
+  const out = [];
+  rows.forEach(r => {
+    r.products.forEach(p => {
+      const isM = !!p.model;
+      if (kind === "machines" && !isM || kind === "other" && isM) return;
+      const ok = priced(r.currency) && p.match !== "missing";
+      out.push({r, name: p.name, q: p.q, val: ok ? p.q * p.rrp : null, est: p.match === "estimated", missing: p.match === "missing"});
+    });
+    if (kind !== "machines" && r.unlisted) out.push({r, name: "Product not recorded", q: r.unlisted, val: null, unknown: true});
+  });
+  return out;
+}
+function openDrill(kind) { drillKind = kind; drawDrill(); const d = $("drill"); if (!d.open) d.showModal(); }
+function drawDrill() {
+  const lines = soldLines(filtered(), drillKind);
+  const title = {machines: "Coffee machines sold", other: "Other products sold", all: "Units sold"}[drillKind];
+  const units = lines.reduce((a, x) => a + x.q, 0), val = {};
+  lines.forEach(x => { if (x.val != null) val[x.r.currency] = (val[x.r.currency] || 0) + x.val; });
+  const valTxt = t => { const parts = Object.entries(t).filter(([, v]) => Math.round(v)).sort().map(([c, v]) => money(v, c)); return parts.join(" · ") || "–"; };
+  $("drillTitle").textContent = title;
+  $("drillSub").textContent = `${$("sub").textContent} · ${nf(units)} unit${units === 1 ? "" : "s"}${Object.keys(val).length ? " · " + valTxt(val).replace(/<[^>]+>/g, "") + " at RRP" : ""}`;
+  document.querySelectorAll("#drillBy button").forEach(b => b.setAttribute("aria-pressed", b.dataset.by === drillBy));
+  if (!lines.length) { $("drillBody").innerHTML = `<p class="empty">Nothing sold for these filters.</p>`; return; }
+  const cell = x => `<td class="l">${esc(x.name)}${x.est ? ` <span class="est">estimate</span>` : ""}${x.missing ? ` <span class="est">no price found</span>` : ""}${x.unknown ? ` <span class="nm">(no value)</span>` : ""}</td><td>${nf(x.q)}</td><td>${x.val != null ? money(x.val, x.r.currency) : "–"}</td>`;
+  const groups = new Map();
+  const key = drillBy === "day" ? x => x.r.date + "|" + x.r.store : x => x.r.store;
+  const merged = new Map();     // same product, same shift: one line with the units added up
+  lines.forEach(x => { const k = x.r.id + "|" + x.name + "|" + !!x.unknown; const m = merged.get(k);
+    if (m) { m.q += x.q; if (x.val != null) m.val = (m.val || 0) + x.val; } else merged.set(k, {...x}); });
+  [...merged.values()].sort((a, b) => drillBy === "day" ? b.r.date.localeCompare(a.r.date) || a.r.store.localeCompare(b.r.store) : a.r.store.localeCompare(b.r.store) || b.r.date.localeCompare(a.r.date))
+    .forEach(x => { const k = key(x); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); });
+  let order = [...groups.entries()];
+  if (drillBy === "store") order.sort((a, b) => b[1].reduce((s, x) => s + x.q, 0) - a[1].reduce((s, x) => s + x.q, 0) || a[0].localeCompare(b[0]));
+  const head = drillBy === "day" ? `<tr><th class="l">Product</th><th>Units</th><th>Value at RRP</th></tr>` : `<tr><th class="l dt">Date</th><th class="l">Product</th><th>Units</th><th>Value at RRP</th></tr>`;
+  const body = order.map(([, xs]) => {
+    const r0 = xs[0].r, u = xs.reduce((s, x) => s + x.q, 0), gv = {};
+    xs.forEach(x => { if (x.val != null) gv[x.r.currency] = (gv[x.r.currency] || 0) + x.val; });
+    const label = drillBy === "day" ? `${fmtD(r0.date)} · ${esc(r0.store)} <span class="gs">${esc(r0.state)}</span>` : `${esc(r0.store)} <span class="gs">${esc(r0.state)} · ${nf(u)} unit${u === 1 ? "" : "s"} · ${valTxt(gv)}</span>`;
+    return `<tr class="g"><td colspan="${drillBy === "day" ? 3 : 4}">${label}</td></tr>` +
+      xs.map(x => `<tr>${drillBy === "store" ? `<td class="dt">${fmtD(x.r.date)}</td>` : ""}${cell(x)}</tr>`).join("");
+  }).join("");
+  $("drillBody").innerHTML = `<table><thead>${head}</thead><tbody>${body}</tbody><tfoot><tr><td class="l" colspan="${drillBy === "day" ? 1 : 2}">Total</td><td>${nf(units)}</td><td>${valTxt(val)}</td></tr></tfoot></table>`;
+}
+document.querySelectorAll("#drillBy button").forEach(b => b.onclick = () => { drillBy = b.dataset.by; drawDrill(); });
+$("drillClose").onclick = () => $("drill").close();
+$("drill").addEventListener("click", e => { if (e.target === $("drill")) $("drill").close(); });   // click outside the panel closes it
 $("ftoggle").onclick = () => { const o = $("ctrl").classList.toggle("open"); $("ftoggle").setAttribute("aria-expanded", o); $("ftoggle").textContent = o ? "Hide filters" : "Filters"; };
 $("kmore").onclick = () => { const o = $("kpis").classList.toggle("open"); $("kmore").setAttribute("aria-expanded", o); $("kmore").textContent = o ? "Fewer figures" : "More figures"; };
 $("print").onclick = () => window.print();

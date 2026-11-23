@@ -47,7 +47,7 @@ button.primary{background:var(--green);color:var(--green-ink);border-color:var(-
 .kpi span{color:var(--mute);font-size:12.5px}
 .kpi.hero{background:var(--green);color:var(--green-ink)}.kpi.hero span{color:var(--green-ink);opacity:.85}
 .kpi.warm{background:var(--peach)}
-.kpi.drill{cursor:pointer;transition:box-shadow .15s}
+.kpi.drill{cursor:pointer;transition:box-shadow .15s;-webkit-tap-highlight-color:rgba(0,0,0,.08);touch-action:manipulation}
 .kpi.drill:hover,.kpi.drill:focus-visible{box-shadow:0 0 0 2px var(--orange);outline:none}
 .kpi.drill span::after{content:" ›";font-weight:700}
 dialog#drill{border:0;border-radius:16px;padding:0;width:min(760px,94vw);max-height:86vh;background:var(--paper);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.25)}
@@ -322,7 +322,6 @@ function render() {
     ["d-only", nf(T.other), "Other products sold", dv(t => t.other), "other"], ["warm", moneyBy(T), "Value at RRP", valDelta], ["k-more", T.stores, "Stores", dv(t => t.stores)],
     ["k-more m-only", nf(T.machines), "Coffee machines sold", dv(t => t.machines), "machines"], ["k-more m-only", nf(T.other), "Other products sold", dv(t => t.other), "other"]
   ].map(([c, v, l, d, dk]) => `<div class="kpi ${c}${dk ? " drill" : ""}"${dk ? ` role="button" tabindex="0" data-drill="${dk}" title="See what was sold, by day and store"` : ""}><b>${v}</b><span>${l}</span>${d ? `<em>${d} ${PP.label}</em>` : ""}</div>`).join("");
-  $("kpis").querySelectorAll(".kpi.drill").forEach(k => { k.onclick = () => openDrill(k.dataset.drill); k.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDrill(k.dataset.drill); } }; });
   const n = [];
   if (T.draft) n.push(`${T.draft} shift${T.draft > 1 ? "s are" : " is"} still a draft (not yet submitted by the demonstrator). Figures may be incomplete.`);
   if (T.pending) n.push(`${T.pending} shift${T.pending > 1 ? "s are" : " is"} submitted but not yet approved. Figures may change after review.`);
@@ -467,7 +466,8 @@ function soldLines(rows, kind) {
   });
   return out;
 }
-function openDrill(kind) { drillKind = kind; drawDrill(); const d = $("drill"); if (!d.open) d.showModal(); }
+function openDrill(kind) { drillKind = kind; drawDrill(); const d = $("drill");
+  if (d.open) return; if (typeof d.showModal === "function") d.showModal(); else d.setAttribute("open", ""); }
 function drawDrill() {
   const lines = soldLines(filtered(), drillKind);
   const title = {machines: "Coffee machines sold", other: "Other products sold", all: "Units sold"}[drillKind];
@@ -498,9 +498,13 @@ function drawDrill() {
   }).join("");
   $("drillBody").innerHTML = `<table><thead>${head}</thead><tbody>${body}</tbody><tfoot><tr><td class="l" colspan="${drillBy === "day" ? 1 : 2}">Total</td><td>${nf(units)}</td><td>${valTxt(val)}</td></tr></tfoot></table>`;
 }
+// one listener on the tile area (survives re-renders; reliable on iPhone Safari)
+$("kpis").addEventListener("click", e => { const k = e.target.closest(".kpi.drill"); if (k) openDrill(k.dataset.drill); });
+$("kpis").addEventListener("keydown", e => { const k = e.target.closest(".kpi.drill"); if (k && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDrill(k.dataset.drill); } });
 document.querySelectorAll("#drillBy button").forEach(b => b.onclick = () => { drillBy = b.dataset.by; drawDrill(); });
-$("drillClose").onclick = () => $("drill").close();
-$("drill").addEventListener("click", e => { if (e.target === $("drill")) $("drill").close(); });   // click outside the panel closes it
+const closeDrill = () => { const d = $("drill"); typeof d.close === "function" ? d.close() : d.removeAttribute("open"); };
+$("drillClose").onclick = closeDrill;
+$("drill").addEventListener("click", e => { if (e.target === $("drill")) closeDrill(); });   // click outside the panel closes it
 $("ftoggle").onclick = () => { const o = $("ctrl").classList.toggle("open"); $("ftoggle").setAttribute("aria-expanded", o); $("ftoggle").textContent = o ? "Hide filters" : "Filters"; };
 $("kmore").onclick = () => { const o = $("kpis").classList.toggle("open"); $("kmore").setAttribute("aria-expanded", o); $("kmore").textContent = o ? "Fewer figures" : "More figures"; };
 $("print").onclick = () => window.print();

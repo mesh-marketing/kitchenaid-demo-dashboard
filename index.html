@@ -72,7 +72,7 @@ dialog#drill::backdrop{background:rgba(20,25,22,.45)}
 #drill .db{padding:4px 18px 18px;overflow:auto}
 #drill table{width:100%;border-collapse:collapse;font-size:13.5px}
 #drill td,#drill th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top;white-space:nowrap}
-#drill td.l{white-space:normal;min-width:0;width:100%}#drill td.dt{white-space:nowrap;text-align:left}
+#drill td.l{white-space:normal;min-width:0;width:100%}#drill td.u,#drill th.u{text-align:center;width:1%;padding-right:12px}#drill td.dt{white-space:nowrap;text-align:left}
 #drill table{table-layout:auto}
 #drill td.l,#drill th.l{text-align:left}
 #drill tr.g td{background:var(--band);font-weight:700;text-align:left;border-bottom:0;padding-top:9px}
@@ -498,9 +498,9 @@ function drawDrill() {
     lines.forEach(x => { const k = x.name + "|" + !!x.unknown; const m = g.get(k) || {x, q: 0, val: {}, stores: new Set(), est: false, missing: false};
       m.q += x.q; m.stores.add(x.r.store); if (x.val != null) m.val[x.r.currency] = (m.val[x.r.currency] || 0) + x.val; m.est = m.est || x.est; m.missing = m.missing || x.missing; g.set(k, m); });
     const rowsP = [...g.values()].sort((a, b) => b.q - a.q || a.x.name.localeCompare(b.x.name));
-    $("drillBody").innerHTML = `<table><thead><tr><th class="l">Product</th><th>Stores</th><th>Units</th><th>Value at RRP</th></tr></thead><tbody>${rowsP.map(m =>
-      `<tr><td class="l">${esc(m.x.name)}${m.est ? ` <span class="est">estimate</span>` : ""}${m.missing ? ` <span class="est">no price found</span>` : ""}${m.x.unknown ? ` <span class="nm">(no value)</span>` : ""}</td><td>${m.stores.size}</td><td>${nf(m.q)}</td><td>${valTxt(m.val)}</td></tr>`).join("")}</tbody>
-      <tfoot><tr><td class="l" colspan="2">Total · ${g.size} product${g.size === 1 ? "" : "s"}</td><td>${nf(units)}</td><td>${valTxt(val)}</td></tr></tfoot></table>`;
+    $("drillBody").innerHTML = `<table><thead><tr><th class="u">Units</th><th class="l">Product</th><th>Value at RRP</th></tr></thead><tbody>${rowsP.map(m =>
+      `<tr><td class="u">${nf(m.q)}</td><td class="l">${esc(m.x.name)}${m.est ? ` <span class="est">estimate</span>` : ""}${m.missing ? ` <span class="est">no price found</span>` : ""}${m.x.unknown ? ` <span class="nm">(no value)</span>` : ""}</td><td>${valTxt(m.val)}</td></tr>`).join("")}</tbody>
+      <tfoot><tr><td class="u">${nf(units)}</td><td class="l">Total · ${g.size} product${g.size === 1 ? "" : "s"}</td><td>${valTxt(val)}</td></tr></tfoot></table>`;
     return;
   }
   const cell = x => `<td class="l">${esc(x.name)}${x.est ? ` <span class="est">estimate</span>` : ""}${x.missing ? ` <span class="est">no price found</span>` : ""}${x.unknown ? ` <span class="nm">(no value)</span>` : ""}</td><td>${nf(x.q)}</td><td>${x.val != null ? money(x.val, x.r.currency) : "–"}</td>`;

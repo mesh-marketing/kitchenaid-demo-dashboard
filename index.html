@@ -272,12 +272,15 @@ function ingest(data) {
   });
   $("client").textContent = D.client;
   showAsat();
-  const curM = $("month").value, months = [...new Set(D.shifts.map(s => s.date.slice(0, 7)))].sort().reverse();
+  const curM = $("month").value, months = [...new Set([...D.shifts.map(s => s.date.slice(0, 7)), D.window[1].slice(0, 7)])].sort().reverse();
   $("month").innerHTML = `<option value="">All months</option>` + months.map(m => `<option value="${m}">${monthLabel(m)}</option>`).join("");
   if (curM && months.includes(curM)) $("month").value = curM;
-  const curW = $("week").value, weeks = [...new Set(D.shifts.map(s => s.week))].sort().reverse();
-  $("week").innerHTML = weeks.map(w => `<option value="${w}">${weekLabel(w)}</option>`).join("") + `<option value="all">All weeks (${esc(D.period_label)})</option>`;
-  if (curW && [...$("week").options].some(o => o.value === curW)) $("week").value = curW;
+  // every week from the start date to the current week, even ones with no shifts yet (so "this week" is always there)
+  const prevTop = $("week").options.length ? $("week").options[0].value : "", curW = $("week").value, weeks = [];
+  const mon = d => addDays(d, -((pd(d).getUTCDay() + 6) % 7));
+  for (let w = mon(D.window[1]), first = mon(D.window[0]); w >= first; w = addDays(w, -7)) weeks.push(w);
+  $("week").innerHTML = weeks.map((w, i) => `<option value="${w}">${i === 0 ? "This week · " : i === 1 ? "Last week · " : ""}${weekLabel(w)}</option>`).join("") + `<option value="all">All weeks (${esc(D.period_label)})</option>`;
+  if (curW && curW !== prevTop && [...$("week").options].some(o => o.value === curW)) $("week").value = curW;   // after a refresh, "this week" stays this week
   stateOpts(); opts($("fStaff"), "All staff", uniq("staff")); opts($("fStore"), "All stores", uniq("store"));
   render();
 }

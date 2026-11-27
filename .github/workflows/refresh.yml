@@ -48,8 +48,13 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data.enc.json checks.enc.json status.json
           if git diff --cached --quiet; then echo "No change."; exit 0; fi
+          # Put this run's data on top of the latest main (two quick Refresh presses used to clash here)
+          git fetch --quiet origin main
+          git reset --quiet origin/main
+          git add data.enc.json checks.enc.json status.json
+          if git diff --cached --quiet; then echo "No change."; exit 0; fi
           git commit -m "Refresh data $(date -u +%Y-%m-%dT%H:%MZ)"
-          git pull --rebase --quiet && git push
+          git push
       - name: Alert on failure
         if: failure()
         env:
